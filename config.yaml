@@ -1,0 +1,7 @@
+wallet_mnemonic: "rebel wet poet torch carpet gaze axis ribbon approve depend inflict menu"
+chain:
+  id: cudos-local-network
+  rpc: http://127.0.0.1:26657
+  grpc: http://127.0.0.1:9090
+state_file: state.json
+payment_denom: acudos
