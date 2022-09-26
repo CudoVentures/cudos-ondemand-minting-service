@@ -4,4 +4,7 @@ chain:
   rpc: http://127.0.0.1:26657
   grpc: http://127.0.0.1:9090
 state_file: state.json
+max_retries: 10
+retry_interval: 30s
+relay_interval: 5s
 payment_denom: acudos

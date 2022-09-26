@@ -32,8 +32,9 @@ type Config struct {
 		RPC  string `yaml:"rpc"`
 		GRPC string `yaml:"grpc"`
 	} `yaml:"chain"`
-	MaxRetries           int           `yaml:"max_retries"`
-	RetryInterval        time.Duration `yaml:"retry_interval"`
-	BalanceCheckInterval time.Duration `yaml:"relay_interval"`
-	PaymentDenom         string        `yaml:"payment_denom"`
+	StateFile     string        `yaml:"state_file"`
+	MaxRetries    int           `yaml:"max_retries"`
+	RetryInterval time.Duration `yaml:"retry_interval"`
+	RelayInterval time.Duration `yaml:"relay_interval"`
+	PaymentDenom  string        `yaml:"payment_denom"`
 }

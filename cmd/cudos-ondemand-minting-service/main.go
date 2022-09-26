@@ -28,7 +28,7 @@ func main() {
 	cudosapp.SetConfig()
 	encodingConfig := makeEncodingConfig([]module.BasicManager{cudosapp.ModuleBasics})()
 
-	state := filestate.NewFileState("state.json")
+	state := filestate.NewFileState(cfg.StateFile)
 
 	infraClient := infraclient.NewTokenisedInfraClient()
 

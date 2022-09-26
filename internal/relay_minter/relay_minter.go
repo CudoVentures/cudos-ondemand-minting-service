@@ -38,12 +38,7 @@ func (rm *relayMinter) Start(ctx context.Context) error {
 
 	defer close(rm.errored)
 
-	walletAddress, err := sdk.AccAddressFromBech32(rm.privKey.PubKey().Address().String())
-	if err != nil {
-		return err
-	}
-
-	rm.walletAddress = walletAddress
+	rm.walletAddress = sdk.AccAddress(rm.privKey.PubKey().Address())
 
 	retries := 0
 
@@ -97,7 +92,7 @@ func (rm *relayMinter) startRelaying(ctx context.Context) {
 			return
 		}
 
-		time.Sleep(rm.config.BalanceCheckInterval)
+		time.Sleep(rm.config.RelayInterval)
 	}
 }
 
