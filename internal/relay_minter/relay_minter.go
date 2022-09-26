@@ -107,7 +107,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		return err
 	}
 
-	results, err := rm.getTxsByQuery(fmt.Sprintf("tx.height>%d AND transfer.recipient=%s", s.Height, rm.walletAddress))
+	results, err := rm.getTxsByQuery(fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress))
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (rm *relayMinter) getTxsByQuery(query string) (*ctypes.ResultTxSearch, erro
 	defer cancelFunc()
 
 	// TODO: Do we need to do pagination? Will we get all results if we don't use pagination or there is some limit?
-	results, err := rm.node.TxSearch(txSearchCtx, query, true, nil, nil, "tx.height")
+	results, err := rm.node.TxSearch(txSearchCtx, query, true, nil, nil, "asc")
 	if err != nil {
 		return nil, fmt.Errorf("tx search (%s) failed: %s", query, err)
 	}
@@ -237,7 +237,7 @@ func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (recei
 }
 
 func (rm *relayMinter) isMinted(uid string) (bool, error) {
-	results, err := rm.getTxsByQuery(fmt.Sprintf("marketplace_mint_nft.uid=%s", uid))
+	results, err := rm.getTxsByQuery(fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
 	if err != nil {
 		return false, err
 	}
@@ -248,7 +248,7 @@ func (rm *relayMinter) isMinted(uid string) (bool, error) {
 }
 
 func (rm *relayMinter) isRefunded(receiveTxHash, refundReceiver string) (bool, error) {
-	results, err := rm.getTxsByQuery(fmt.Sprintf("transfer.sender=%s AND transfer.recipient=%s", rm.walletAddress, refundReceiver))
+	results, err := rm.getTxsByQuery(fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", rm.walletAddress, refundReceiver))
 	if err != nil {
 		return false, err
 	}
