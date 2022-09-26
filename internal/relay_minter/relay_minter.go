@@ -301,7 +301,8 @@ func (rm *relayMinter) isRefunded(receiveTxHash, refundReceiver string) (bool, e
 	return false, nil
 }
 
-// Refund only if not refunded already by checking onchain and the money that user sent are enough to cover the gas fees, otherwise skip
+// Refund only if not refunded already by checking onchain
+// and the money that user sent are enough to cover the gas fees, otherwise skip
 func (rm *relayMinter) refund(txHash, refundReceiver string, amount sdk.Coin) error {
 	isRefunded, err := rm.isRefunded(txHash, refundReceiver)
 	if err != nil {
@@ -322,9 +323,20 @@ func (rm *relayMinter) refund(txHash, refundReceiver string, amount sdk.Coin) er
 		return fmt.Errorf("invalid refund receiver address (%s) during refund: %s", refundReceiver, err)
 	}
 
-	// TODO: Estimate gas fees and subtract from amount
-
 	msgSend := banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(amount))
+
+	gasResult, err := rm.txSender.EstimateGas([]sdk.Msg{msgSend})
+	if err != nil {
+		return err
+	}
+
+	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit))
+
+	// We want to have some min refund amount to prevent DoS
+	if amountWithoutGas.LT(sdk.NewIntFromUint64(minRefundAmount)) {
+		return fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)",
+			amountWithoutGas.Uint64(), minRefundAmount)
+	}
 
 	return rm.txSender.SendTx([]sdk.Msg{msgSend}, txHash)
 }
@@ -334,10 +346,20 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 		return fmt.Errorf("nft (%s) has invalid status (%s)", uid, nftData.Status)
 	}
 
-	// TODO: Estimate gas fees and subtract from amount
-
 	msgMintNft := marketplacetypes.NewMsgMintNft(rm.walletAddress.String(), nftData.DenomID,
 		recipient, nftData.Name, nftData.Uri, nftData.Data, uid, nftData.Price)
+
+	gasResult, err := rm.txSender.EstimateGas([]sdk.Msg{msgMintNft})
+	if err != nil {
+		return err
+	}
+
+	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit))
+
+	if amountWithoutGas.LT(nftData.Price.Amount) {
+		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)",
+			amountWithoutGas.Uint64(), nftData.Price.Amount.Uint64())
+	}
 
 	if err := rm.txSender.SendTx([]sdk.Msg{msgMintNft}, ""); err != nil {
 		return err
@@ -351,6 +373,7 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 }
 
 const txSearchTimeout = 10 * time.Second
+const minRefundAmount = 5000000000000000000
 
 type relayMinter struct {
 	encodingConfig params.EncodingConfig
