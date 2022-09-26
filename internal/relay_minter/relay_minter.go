@@ -18,7 +18,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/rs/zerolog/log"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"google.golang.org/grpc"
 )
@@ -59,17 +58,15 @@ func (rm *relayMinter) Start(ctx context.Context) error {
 			continue
 		}
 
-		rm.grpcConn = grpcConn
-
 		node, err := client.NewClientFromNode(rm.config.Chain.RPC)
 		if err != nil {
 			retry(fmt.Errorf("connecting (%s) failed: %s", rm.config.Chain.RPC, err))
 			continue
 		}
 
-		rm.node = node
-
-		rm.txSender = relaytx.NewTxSender(grpcConn, queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig, rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom)
+		rm.txSender = relaytx.NewTxSender(grpcConn, queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
+			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom)
+		rm.txQuerier = relaytx.NewTxQuerier(node)
 
 		go rm.startRelaying(ctx)
 
@@ -107,7 +104,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		return err
 	}
 
-	results, err := rm.getTxsByQuery(fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress))
+	results, err := rm.txQuerier.Query(fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress))
 	if err != nil {
 		return err
 	}
@@ -156,19 +153,6 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 	s.Height = results.Txs[len(results.Txs)-1].Height
 
 	return rm.stateStorage.UpdateState(s)
-}
-
-func (rm *relayMinter) getTxsByQuery(query string) (*ctypes.ResultTxSearch, error) {
-	txSearchCtx, cancelFunc := context.WithTimeout(context.Background(), txSearchTimeout)
-	defer cancelFunc()
-
-	// TODO: Do we need to do pagination? Will we get all results if we don't use pagination or there is some limit?
-	results, err := rm.node.TxSearch(txSearchCtx, query, true, nil, nil, "asc")
-	if err != nil {
-		return nil, fmt.Errorf("tx search (%s) failed: %s", query, err)
-	}
-
-	return results, nil
 }
 
 func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, error) {
@@ -237,7 +221,7 @@ func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (recei
 }
 
 func (rm *relayMinter) isMinted(uid string) (bool, error) {
-	results, err := rm.getTxsByQuery(fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
+	results, err := rm.txQuerier.Query(fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
 	if err != nil {
 		return false, err
 	}
@@ -248,7 +232,7 @@ func (rm *relayMinter) isMinted(uid string) (bool, error) {
 }
 
 func (rm *relayMinter) isRefunded(receiveTxHash, refundReceiver string) (bool, error) {
-	results, err := rm.getTxsByQuery(fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", rm.walletAddress, refundReceiver))
+	results, err := rm.txQuerier.Query(fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", rm.walletAddress, refundReceiver))
 	if err != nil {
 		return false, err
 	}
@@ -367,7 +351,6 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 	return nil
 }
 
-const txSearchTimeout = 10 * time.Second
 const minRefundAmount = 5000000000000000000
 
 type relayMinter struct {
@@ -377,9 +360,8 @@ type relayMinter struct {
 	stateStorage   stateStorage
 	privKey        *secp256k1.PrivKey
 	walletAddress  sdk.AccAddress
-	node           *rpchttp.HTTP
-	grpcConn       *grpc.ClientConn
 	txSender       txSender
+	txQuerier      txQuerier
 	nftDataClient  nftDataClient
 }
 
@@ -406,6 +388,10 @@ type stateStorage interface {
 type txSender interface {
 	EstimateGas(msgs []sdk.Msg) (model.GasResult, error)
 	SendTx(msgs []sdk.Msg, memo string) error
+}
+
+type txQuerier interface {
+	Query(query string) (*ctypes.ResultTxSearch, error)
 }
 
 type nftDataClient interface {
