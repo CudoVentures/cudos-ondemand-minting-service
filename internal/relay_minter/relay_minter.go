@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/tendermint/tendermint/libs/bytes"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"google.golang.org/grpc"
 )
@@ -65,7 +66,7 @@ func (rm *relayMinter) Start(ctx context.Context) error {
 		}
 
 		rm.txSender = relaytx.NewTxSender(txtypes.NewServiceClient(grpcConn), queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
-			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom)
+			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom, gasPrice, gasAdjustment)
 		rm.txQuerier = relaytx.NewTxQuerier(node)
 
 		go rm.startRelaying(ctx)
@@ -145,7 +146,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			if errRefund := rm.refund(result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
 				return fmt.Errorf("%s, failed to refund: %s", errMint, errRefund)
 			}
-			return errMint
+			rm.logger.Error(errMint)
 		}
 	}
 
@@ -255,7 +256,10 @@ func (rm *relayMinter) isMinted(uid string) (bool, error) {
 			continue
 		}
 
-		return true, nil
+		if mintMsg.Uid == uid {
+			rm.logger.Error(fmt.Errorf("already minted %s", uid))
+			return true, nil
+		}
 	}
 
 	return false, nil
@@ -302,7 +306,8 @@ func (rm *relayMinter) isRefunded(receiveTxHash, refundReceiver string) (bool, e
 			continue
 		}
 
-		if txWithMemo.GetMemo() == receiveTxHash {
+		if bytes.HexBytes(txWithMemo.GetMemo()).String() == receiveTxHash {
+			rm.logger.Error(fmt.Errorf("already refunded %s", receiveTxHash))
 			return true, nil
 		}
 	}
@@ -341,7 +346,9 @@ func (rm *relayMinter) refund(txHash, refundReceiver string, amount sdk.Coin) er
 		return err
 	}
 
-	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit))
+	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice)))
+
+	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 
 	// We want to have some min refund amount to prevent DoS
 	if amountWithoutGas.LT(sdk.NewIntFromUint64(minRefundAmount)) {
@@ -366,7 +373,7 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 		return err
 	}
 
-	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit))
+	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice)))
 
 	if amountWithoutGas.LT(nftData.Price.Amount) {
 		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)",
@@ -384,7 +391,11 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 	return nil
 }
 
-const minRefundAmount = 5000000000000000000
+const (
+	gasPrice        = uint64(5000000000000)
+	gasAdjustment   = float64(1.3)
+	minRefundAmount = 5000000000000000000
+)
 
 type relayMinter struct {
 	encodingConfig *params.EncodingConfig

@@ -1,6 +1,9 @@
 package relayminter
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -23,31 +26,50 @@ type mockState struct {
 	state model.State
 }
 
-func newTokenisedInfraClient() *mockTokenisedInfraClient {
-	return &mockTokenisedInfraClient{}
+func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData) *mockTokenisedInfraClient {
+	return &mockTokenisedInfraClient{nftDataEntires: nftDataEntires}
 }
 
 func (mtic *mockTokenisedInfraClient) GetNFTData(uid string) (model.NFTData, error) {
-	return model.NFTData{}, nil
+	if data, ok := mtic.nftDataEntires[uid]; ok {
+		return data, nil
+	}
+	return model.NFTData{}, fmt.Errorf("data for NFT '%s' not found", uid)
 }
 
 func (mtic *mockTokenisedInfraClient) MarkMintedNFT(uid string) error {
+	// TODO: Update status to minted
 	return nil
 }
 
 type mockTokenisedInfraClient struct {
+	nftDataEntires map[string]model.NFTData
 }
 
-func newMockTxQuerier(queryResult *ctypes.ResultTxSearch) *mockTxQuerier {
-	return &mockTxQuerier{queryResult: queryResult}
+func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResults *ctypes.ResultTxSearch, refundQueryResults *ctypes.ResultTxSearch) *mockTxQuerier {
+	return &mockTxQuerier{
+		bankSendQueryResults: bankSendQueryResults,
+		mintQueryResults:     mintQueryResults,
+		refundQueryResults:   refundQueryResults,
+	}
 }
 
 func (mq *mockTxQuerier) Query(query string) (*ctypes.ResultTxSearch, error) {
-	return mq.queryResult, nil
+	if strings.Contains(query, "tx.height") {
+		return mq.bankSendQueryResults, nil
+	} else if strings.Contains(query, "transfer.sender") {
+		return mq.refundQueryResults, nil
+	} else if strings.Contains(query, "marketplace_mint_nft") {
+		return mq.mintQueryResults, nil
+	}
+
+	panic("invalid query")
 }
 
 type mockTxQuerier struct {
-	queryResult *ctypes.ResultTxSearch
+	bankSendQueryResults *ctypes.ResultTxSearch
+	mintQueryResults     *ctypes.ResultTxSearch
+	refundQueryResults   *ctypes.ResultTxSearch
 }
 
 func newMockTxSender() *mockTxSender {

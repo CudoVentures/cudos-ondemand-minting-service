@@ -15,7 +15,8 @@ import (
 	authsign "github.com/cosmos/cosmos-sdk/x/auth/signing"
 )
 
-func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient, encodingConfig *params.EncodingConfig, privKey *secp256k1.PrivKey, chainID, paymentDenom string) *txSender {
+func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient, encodingConfig *params.EncodingConfig,
+	privKey *secp256k1.PrivKey, chainID, paymentDenom string, gasPrice uint64, gasAdjustment float64) *txSender {
 	return &txSender{
 		txClient:       txClient,
 		accInfoClient:  accInfoClient,
@@ -23,6 +24,8 @@ func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient
 		privKey:        privKey,
 		chainID:        chainID,
 		paymentDenom:   paymentDenom,
+		gasPrice:       gasPrice,
+		gasAdjustment:  gasAdjustment,
 	}
 }
 
@@ -89,11 +92,11 @@ func (ts *txSender) EstimateGas(msgs []sdk.Msg) (model.GasResult, error) {
 		return model.GasResult{}, errors.New("simulation result with no gas info")
 	}
 
-	estimatedGasAmount := sdk.NewIntFromUint64(uint64((float64(simRes.GasInfo.GasUsed) * gasAdjustment))).Mul(sdk.NewIntFromUint64(gasPrice))
+	estimatedGasAmount := sdk.NewIntFromUint64(uint64((float64(simRes.GasInfo.GasUsed) * ts.gasAdjustment))).Mul(sdk.NewIntFromUint64(ts.gasPrice))
 
 	return model.GasResult{
 		FeeAmount: sdk.NewCoins(sdk.NewCoin(ts.paymentDenom, estimatedGasAmount)),
-		GasLimit:  uint64((float64(simRes.GasInfo.GasUsed) * gasAdjustment)),
+		GasLimit:  uint64((float64(simRes.GasInfo.GasUsed) * ts.gasAdjustment)),
 	}, nil
 }
 
@@ -151,11 +154,6 @@ func (ts *txSender) genTx(msgs []sdk.Msg, memo string, feeAmt sdk.Coins, gas, ac
 	return tx.GetTx(), nil
 }
 
-const (
-	gasPrice      = uint64(5000000000000)
-	gasAdjustment = float64(1.3)
-)
-
 type accountInfoClient interface {
 	QueryInfo(ctx context.Context, address string) (model.AccountInfo, error)
 }
@@ -167,4 +165,6 @@ type txSender struct {
 	privKey        *secp256k1.PrivKey
 	chainID        string
 	paymentDenom   string
+	gasPrice       uint64
+	gasAdjustment  float64
 }
