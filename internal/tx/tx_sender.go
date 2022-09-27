@@ -13,12 +13,11 @@ import (
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsign "github.com/cosmos/cosmos-sdk/x/auth/signing"
-	"google.golang.org/grpc"
 )
 
-func NewTxSender(grpcConn *grpc.ClientConn, accInfoClient accountInfoClient, encodingConfig params.EncodingConfig, privKey *secp256k1.PrivKey, chainID, paymentDenom string) *txSender {
+func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient, encodingConfig *params.EncodingConfig, privKey *secp256k1.PrivKey, chainID, paymentDenom string) *txSender {
 	return &txSender{
-		txClient:       txtypes.NewServiceClient(grpcConn),
+		txClient:       txClient,
 		accInfoClient:  accInfoClient,
 		encodingConfig: encodingConfig,
 		privKey:        privKey,
@@ -164,7 +163,7 @@ type accountInfoClient interface {
 type txSender struct {
 	txClient       txtypes.ServiceClient
 	accInfoClient  accountInfoClient
-	encodingConfig params.EncodingConfig
+	encodingConfig *params.EncodingConfig
 	privKey        *secp256k1.PrivKey
 	chainID        string
 	paymentDenom   string

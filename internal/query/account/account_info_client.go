@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func NewAccountInfoClient(grpcConn *grpc.ClientConn, encodingConfig params.EncodingConfig) *accountInfoClient {
+func NewAccountInfoClient(grpcConn *grpc.ClientConn, encodingConfig *params.EncodingConfig) *accountInfoClient {
 	return &accountInfoClient{
 		encodingConfig: encodingConfig,
 		authClient:     auth.NewQueryClient(grpcConn),
@@ -37,7 +37,7 @@ func (aic *accountInfoClient) QueryInfo(ctx context.Context, address string) (mo
 }
 
 type accountInfoClient struct {
-	encodingConfig params.EncodingConfig
+	encodingConfig *params.EncodingConfig
 	authClient     auth.QueryClient
 	bankClient     bank.QueryClient
 }

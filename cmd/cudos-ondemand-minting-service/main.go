@@ -4,41 +4,43 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/rs/zerolog/log"
+	"os"
 
 	cudosapp "github.com/CudoVentures/cudos-node/app"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	encodingconfig "github.com/CudoVentures/cudos-ondemand-minting-service/internal/encoding_config"
 	key "github.com/CudoVentures/cudos-ondemand-minting-service/internal/key"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/logger"
 	relayminter "github.com/CudoVentures/cudos-ondemand-minting-service/internal/relay_minter"
-	filestate "github.com/CudoVentures/cudos-ondemand-minting-service/internal/state/file"
+	state "github.com/CudoVentures/cudos-ondemand-minting-service/internal/state"
 	infraclient "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tokenised_infra/client"
+	"github.com/rs/zerolog"
 )
 
 func main() {
 	cfg, err := config.NewConfig("config.yaml")
+
+	zlogger := logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger())
+
 	if err != nil {
-		log.Fatal().Err(fmt.Errorf("creating config failed: %s", err)).Send()
+		zlogger.Fatal(fmt.Errorf("creating config failed: %s", err))
 		return
 	}
 
 	cudosapp.SetConfig()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
 
-	state := filestate.NewFileState(cfg.StateFile)
+	state := state.NewFileState(cfg.StateFile)
 
 	infraClient := infraclient.NewTokenisedInfraClient()
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {
-		log.Fatal().Err(errors.New("failed to create private key from wallet mnemonic"))
+		zlogger.Fatal(errors.New("failed to create private key from wallet mnemonic"))
 		return
 	}
 
-	minter := relayminter.NewRelayMinter(encodingConfig, cfg, state, infraClient, privKey)
+	minter := relayminter.NewRelayMinter(zlogger, &encodingConfig, cfg, state, infraClient, privKey)
 
-	err = minter.Start(context.Background())
-
-	log.Fatal().Err(err).Send()
+	zlogger.Fatal(minter.Start(context.Background()))
 }

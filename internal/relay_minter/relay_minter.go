@@ -16,13 +16,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	"github.com/rs/zerolog/log"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"google.golang.org/grpc"
 )
 
-func NewRelayMinter(encodingConfig params.EncodingConfig, cfg config.Config, stateStorage stateStorage, nftDataClient nftDataClient, privKey *secp256k1.PrivKey) *relayMinter {
+func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage, nftDataClient nftDataClient, privKey *secp256k1.PrivKey) *relayMinter {
 	return &relayMinter{
 		encodingConfig: encodingConfig,
 		errored:        make(chan error),
@@ -30,6 +30,8 @@ func NewRelayMinter(encodingConfig params.EncodingConfig, cfg config.Config, sta
 		stateStorage:   stateStorage,
 		privKey:        privKey,
 		nftDataClient:  nftDataClient,
+		logger:         logger,
+		walletAddress:  sdk.AccAddress(privKey.PubKey().Address()),
 	}
 }
 
@@ -37,12 +39,10 @@ func (rm *relayMinter) Start(ctx context.Context) error {
 
 	defer close(rm.errored)
 
-	rm.walletAddress = sdk.AccAddress(rm.privKey.PubKey().Address())
-
 	retries := 0
 
 	retry := func(err error) {
-		log.Error().Err(fmt.Errorf("relaying failed: %v", err)).Send()
+		rm.logger.Error(fmt.Errorf("relaying failed: %v", err))
 
 		time.Sleep(rm.config.RetryInterval)
 
@@ -64,7 +64,7 @@ func (rm *relayMinter) Start(ctx context.Context) error {
 			continue
 		}
 
-		rm.txSender = relaytx.NewTxSender(grpcConn, queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
+		rm.txSender = relaytx.NewTxSender(txtypes.NewServiceClient(grpcConn), queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
 			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom)
 		rm.txQuerier = relaytx.NewTxQuerier(node)
 
@@ -118,6 +118,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 	for _, result := range results.Txs {
 		sendInfo, err := rm.getReceivedBankSendInfo(result)
 		if err != nil {
+			rm.logger.Error(fmt.Errorf("getting received bank send info failed: %s", err))
 			continue
 		}
 
@@ -173,7 +174,7 @@ func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, erro
 func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (receivedBankSend, error) {
 	txWithMemo, err := rm.decodeTx(resultTx)
 	if err != nil {
-		return receivedBankSend{}, err
+		return receivedBankSend{}, fmt.Errorf("getting received bank info: %s", err)
 	}
 
 	var memo mintMemo
@@ -200,8 +201,8 @@ func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (recei
 		return receivedBankSend{}, errors.New("not valid bank send")
 	}
 
-	if bankSendMsg.ToAddress != string(rm.walletAddress) {
-		return receivedBankSend{}, fmt.Errorf("bank send receiver (%s) is not the wallet (%s)", bankSendMsg.ToAddress, rm.walletAddress)
+	if bankSendMsg.ToAddress != rm.walletAddress.String() {
+		return receivedBankSend{}, fmt.Errorf("bank send receiver (%s) is not the wallet (%s)", bankSendMsg.ToAddress, rm.walletAddress.String())
 	}
 
 	if len(bankSendMsg.Amount) != 1 {
@@ -225,9 +226,38 @@ func (rm *relayMinter) isMinted(uid string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if results != nil && len(results.Txs) != 0 {
+
+	if results == nil || len(results.Txs) == 0 {
+		return false, nil
+	}
+
+	for _, result := range results.Txs {
+		tx, err := rm.decodeTx(result)
+		if err != nil {
+			rm.logger.Error(fmt.Errorf("during check if minted, decoding tx (%s) failed: %s", result.Hash, err))
+			continue
+		}
+
+		msgs := tx.GetMsgs()
+		if len(msgs) != 1 {
+			rm.logger.Error(fmt.Errorf("during check if minted, expected one message but got %d", len(msgs)))
+			continue
+		}
+
+		mintMsg, ok := msgs[0].(*marketplacetypes.MsgMintNft)
+		if !ok {
+			rm.logger.Error(errors.New("during check if minted, message was not mint msg"))
+			continue
+		}
+
+		if mintMsg.Creator != rm.walletAddress.String() {
+			rm.logger.Error(fmt.Errorf("during check if minted, creator (%s) of the mint msg is not equal to wallet (%s)", mintMsg.Creator, rm.walletAddress.String()))
+			continue
+		}
+
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -246,29 +276,29 @@ func (rm *relayMinter) isRefunded(receiveTxHash, refundReceiver string) (bool, e
 	for _, result := range results.Txs {
 		txWithMemo, err := rm.decodeTx(result)
 		if err != nil {
-			log.Error().Err(fmt.Errorf("decoding tx (%s) failed: %s", result.Hash, err)).Send()
+			rm.logger.Error(fmt.Errorf("during refunding decoding tx (%s) failed: %s", result.Hash, err))
 			continue
 		}
 
 		msgs := txWithMemo.GetMsgs()
 		if len(msgs) != 1 {
-			log.Error().Err(fmt.Errorf("refund bank send tx should contain exactly one message but instead it contains %d", len(msgs))).Send()
+			rm.logger.Error(fmt.Errorf("refund bank send tx should contain exactly one message but instead it contains %d", len(msgs)))
 			continue
 		}
 
 		bankSendMsg, ok := msgs[0].(*banktypes.MsgSend)
 		if !ok {
-			log.Error().Err(errors.New("not valid bank send"))
+			rm.logger.Error(errors.New("refund bank send not valid bank send"))
 			continue
 		}
 
 		if bankSendMsg.FromAddress != rm.walletAddress.String() {
-			log.Error().Err(fmt.Errorf("refund bank send from expected %s but actual is %s", rm.walletAddress.String(), bankSendMsg.FromAddress)).Send()
+			rm.logger.Error(fmt.Errorf("refund bank send from expected %s but actual is %s", rm.walletAddress.String(), bankSendMsg.FromAddress))
 			continue
 		}
 
 		if bankSendMsg.ToAddress != refundReceiver {
-			log.Error().Err(fmt.Errorf("refund bank send to expected %s but actual is %s", refundReceiver, bankSendMsg.ToAddress)).Send()
+			rm.logger.Error(fmt.Errorf("refund bank send to expected %s but actual is %s", refundReceiver, bankSendMsg.ToAddress))
 			continue
 		}
 
@@ -294,12 +324,14 @@ func (rm *relayMinter) refund(txHash, refundReceiver string, amount sdk.Coin) er
 
 	walletAddress, err := sdk.AccAddressFromBech32(rm.walletAddress.String())
 	if err != nil {
-		return fmt.Errorf("invalid wallet address (%s) during refund: %s", rm.walletAddress, err)
+		rm.logger.Error(fmt.Errorf("invalid wallet address (%s) during refund: %s", rm.walletAddress, err))
+		return nil
 	}
 
 	refundAddress, err := sdk.AccAddressFromBech32(refundReceiver)
 	if err != nil {
-		return fmt.Errorf("invalid refund receiver address (%s) during refund: %s", refundReceiver, err)
+		rm.logger.Error(fmt.Errorf("invalid refund receiver address (%s) during refund: %s", refundReceiver, err))
+		return nil
 	}
 
 	msgSend := banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(amount))
@@ -313,8 +345,9 @@ func (rm *relayMinter) refund(txHash, refundReceiver string, amount sdk.Coin) er
 
 	// We want to have some min refund amount to prevent DoS
 	if amountWithoutGas.LT(sdk.NewIntFromUint64(minRefundAmount)) {
-		return fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)",
-			amountWithoutGas.Uint64(), minRefundAmount)
+		rm.logger.Error(fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)",
+			amountWithoutGas.Int64(), minRefundAmount))
+		return nil
 	}
 
 	return rm.txSender.SendTx([]sdk.Msg{msgSend}, txHash)
@@ -345,7 +378,7 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 	}
 
 	if err := rm.nftDataClient.MarkMintedNFT(uid); err != nil {
-		log.Error().Err(fmt.Errorf("failed marking nft (%s) as minted: %s", uid, err)).Send()
+		rm.logger.Error(fmt.Errorf("failed marking nft (%s) as minted: %s", uid, err))
 	}
 
 	return nil
@@ -354,7 +387,7 @@ func (rm *relayMinter) mint(uid, recipient string, nftData model.NFTData, amount
 const minRefundAmount = 5000000000000000000
 
 type relayMinter struct {
-	encodingConfig params.EncodingConfig
+	encodingConfig *params.EncodingConfig
 	errored        chan error
 	config         config.Config
 	stateStorage   stateStorage
@@ -363,6 +396,7 @@ type relayMinter struct {
 	txSender       txSender
 	txQuerier      txQuerier
 	nftDataClient  nftDataClient
+	logger         relayLogger
 }
 
 type mintMemo struct {
@@ -397,4 +431,8 @@ type txQuerier interface {
 type nftDataClient interface {
 	GetNFTData(uid string) (model.NFTData, error)
 	MarkMintedNFT(uid string) error
+}
+
+type relayLogger interface {
+	Error(err error)
 }
