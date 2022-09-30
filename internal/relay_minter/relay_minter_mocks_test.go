@@ -1,6 +1,7 @@
 package relayminter
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -30,14 +31,14 @@ func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData) *mockToken
 	return &mockTokenisedInfraClient{nftDataEntires: nftDataEntires}
 }
 
-func (mtic *mockTokenisedInfraClient) GetNFTData(uid string) (model.NFTData, error) {
+func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
 	if data, ok := mtic.nftDataEntires[uid]; ok {
 		return data, nil
 	}
 	return model.NFTData{}, fmt.Errorf("data for NFT '%s' not found", uid)
 }
 
-func (mtic *mockTokenisedInfraClient) MarkMintedNFT(uid string) error {
+func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) error {
 	// TODO: Update status to minted
 	return nil
 }
@@ -54,7 +55,7 @@ func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResu
 	}
 }
 
-func (mq *mockTxQuerier) Query(query string) (*ctypes.ResultTxSearch, error) {
+func (mq *mockTxQuerier) Query(ctx context.Context, query string) (*ctypes.ResultTxSearch, error) {
 	if strings.Contains(query, "tx.height") {
 		return mq.bankSendQueryResults, nil
 	} else if strings.Contains(query, "transfer.sender") {
@@ -79,14 +80,14 @@ func newMockTxSender() *mockTxSender {
 	}
 }
 
-func (mts *mockTxSender) EstimateGas(msgs []sdk.Msg) (model.GasResult, error) {
+func (mts *mockTxSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {
 	return model.GasResult{
 		FeeAmount: mockFeeAmount,
 		GasLimit:  mockGasLimit,
 	}, nil
 }
 
-func (mts *mockTxSender) SendTx(msgs []sdk.Msg, memo string) error {
+func (mts *mockTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
 	mts.outputMsgs = append(mts.outputMsgs, msgs...)
 	mts.outputMemos = append(mts.outputMemos, memo)
 	return nil

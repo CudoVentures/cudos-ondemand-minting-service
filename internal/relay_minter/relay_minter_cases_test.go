@@ -413,7 +413,24 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
+		{
+			name: "ShouldRefundMintRequestForNftWithNonApprovedStatus",
 
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#2\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       nil,
+			expectedLogOutput:   "failed to mint: nft (nftuid#2) has invalid status (rejected)",
+			expectedOutputMemos: []string{""},
+			expectedOutputMsgs: []sdk.Msg{
+				banktypes.NewMsgSend(wallet, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
+			},
+		},
 		{
 			name: "ShouldSuccessfullyRefundNftIfCoinsLessThanPriceWithGas",
 

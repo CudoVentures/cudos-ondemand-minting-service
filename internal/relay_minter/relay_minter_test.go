@@ -30,6 +30,14 @@ func TestRelayMinter(t *testing.T) {
 			DenomID: "testdenom",
 			Status:  model.ApprovedNFTStatus,
 		},
+		"nftuid#2": {
+			Price:   sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+			Name:    "test nft name",
+			Uri:     "test nft uri",
+			Data:    "test nft data",
+			DenomID: "testdenom",
+			Status:  model.RejectedNFTStatus,
+		},
 	})
 	mockLogger := newMockLogger()
 

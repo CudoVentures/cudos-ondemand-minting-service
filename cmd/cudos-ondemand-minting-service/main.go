@@ -18,6 +18,10 @@ import (
 )
 
 func main() {
+	runService(context.Background())
+}
+
+func runService(ctx context.Context) {
 	cfg, err := config.NewConfig("config.yaml")
 
 	zlogger := logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger())
@@ -32,7 +36,7 @@ func main() {
 
 	state := state.NewFileState(cfg.StateFile)
 
-	infraClient := infraclient.NewTokenisedInfraClient()
+	infraClient := infraclient.NewTokenisedInfraClient(cfg.TokenisedInfraUrl)
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {
@@ -42,5 +46,5 @@ func main() {
 
 	minter := relayminter.NewRelayMinter(zlogger, &encodingConfig, cfg, state, infraClient, privKey)
 
-	zlogger.Fatal(minter.Start(context.Background()))
+	minter.Start(ctx)
 }

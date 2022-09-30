@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
@@ -29,37 +28,14 @@ func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient
 	}
 }
 
-func (ts *txSender) SendTx(msgs []sdk.Msg, memo string) error {
+func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
 
-	gasResult, err := ts.EstimateGas(msgs)
+	txBytes, err := ts.buildTx(ctx, msgs, memo, gasResult)
 	if err != nil {
 		return err
 	}
 
-	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancelFunc()
-
-	accAddr, err := sdk.AccAddressFromBech32(ts.privKey.PubKey().Address().String())
-	if err != nil {
-		return err
-	}
-
-	accInfo, err := ts.accInfoClient.QueryInfo(ctx, accAddr.String())
-	if err != nil {
-		return err
-	}
-
-	signedTx, err := ts.genTx(msgs, memo, gasResult.FeeAmount, gasResult.GasLimit, accInfo.AccountNumber, accInfo.AccountSequence)
-	if err != nil {
-		return err
-	}
-
-	txBytes, err := ts.encodingConfig.TxConfig.TxEncoder()(signedTx)
-	if err != nil {
-		return err
-	}
-
-	broadcastRes, err := ts.txClient.BroadcastTx(context.Background(), &txtypes.BroadcastTxRequest{TxBytes: txBytes, Mode: txtypes.BroadcastMode_BROADCAST_MODE_BLOCK})
+	broadcastRes, err := ts.txClient.BroadcastTx(ctx, &txtypes.BroadcastTxRequest{TxBytes: txBytes, Mode: txtypes.BroadcastMode_BROADCAST_MODE_BLOCK})
 	if err != nil {
 		return err
 	}
@@ -71,19 +47,17 @@ func (ts *txSender) SendTx(msgs []sdk.Msg, memo string) error {
 	return nil
 }
 
-func (ts *txSender) EstimateGas(msgs []sdk.Msg) (model.GasResult, error) {
+func (ts *txSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {
 
-	txBuilder := ts.encodingConfig.TxConfig.NewTxBuilder()
-	if err := txBuilder.SetMsgs(msgs...); err != nil {
-		return model.GasResult{}, err
-	}
-
-	txBytes, err := ts.encodingConfig.TxConfig.TxEncoder()(txBuilder.GetTx())
+	txBytes, err := ts.buildTx(ctx, msgs, memo, model.GasResult{
+		FeeAmount: sdk.NewCoins(sdk.NewCoin(ts.paymentDenom, sdk.NewInt(0))),
+		GasLimit:  0,
+	})
 	if err != nil {
 		return model.GasResult{}, err
 	}
 
-	simRes, err := ts.txClient.Simulate(context.Background(), &txtypes.SimulateRequest{TxBytes: txBytes})
+	simRes, err := ts.txClient.Simulate(ctx, &txtypes.SimulateRequest{TxBytes: txBytes})
 	if err != nil {
 		return model.GasResult{}, err
 	}
@@ -98,6 +72,22 @@ func (ts *txSender) EstimateGas(msgs []sdk.Msg) (model.GasResult, error) {
 		FeeAmount: sdk.NewCoins(sdk.NewCoin(ts.paymentDenom, estimatedGasAmount)),
 		GasLimit:  uint64((float64(simRes.GasInfo.GasUsed) * ts.gasAdjustment)),
 	}, nil
+}
+
+func (ts *txSender) buildTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) ([]byte, error) {
+	accAddr := sdk.AccAddress(ts.privKey.PubKey().Address())
+
+	accInfo, err := ts.accInfoClient.QueryInfo(ctx, accAddr.String())
+	if err != nil {
+		return []byte{}, err
+	}
+
+	signedTx, err := ts.genTx(msgs, memo, gasResult.FeeAmount, gasResult.GasLimit, accInfo.AccountNumber, accInfo.AccountSequence)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return ts.encodingConfig.TxConfig.TxEncoder()(signedTx)
 }
 
 func (ts *txSender) genTx(msgs []sdk.Msg, memo string, feeAmt sdk.Coins, gas, accNum, accSeq uint64) (sdk.Tx, error) {
