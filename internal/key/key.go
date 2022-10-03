@@ -22,4 +22,4 @@ func PrivKeyFromMnemonic(mnemonic string) (*secp256k1.PrivKey, error) {
 	return &secp256k1.PrivKey{Key: derivedKey}, nil
 }
 
-const hdPath = "m/44'/118'/0'/0/0"
+var hdPath = "m/44'/118'/0'/0/0"

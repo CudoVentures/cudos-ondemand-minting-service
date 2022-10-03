@@ -2,7 +2,6 @@ package relayminter
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
@@ -27,24 +26,31 @@ type mockState struct {
 	state model.State
 }
 
-func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData) *mockTokenisedInfraClient {
-	return &mockTokenisedInfraClient{nftDataEntires: nftDataEntires}
+func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData, markNftErrors map[string]error) *mockTokenisedInfraClient {
+	return &mockTokenisedInfraClient{
+		nftDataEntires: nftDataEntires,
+		markNftErrors:  markNftErrors,
+	}
 }
 
 func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
 	if data, ok := mtic.nftDataEntires[uid]; ok {
 		return data, nil
 	}
-	return model.NFTData{}, fmt.Errorf("data for NFT '%s' not found", uid)
+	return model.NFTData{}, nil
 }
 
 func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) error {
-	// TODO: Update status to minted
+	err, ok := mtic.markNftErrors[uid]
+	if ok {
+		return err
+	}
 	return nil
 }
 
 type mockTokenisedInfraClient struct {
 	nftDataEntires map[string]model.NFTData
+	markNftErrors  map[string]error
 }
 
 func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResults *ctypes.ResultTxSearch, refundQueryResults *ctypes.ResultTxSearch) *mockTxQuerier {

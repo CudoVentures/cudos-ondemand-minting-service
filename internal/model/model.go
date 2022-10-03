@@ -1,6 +1,8 @@
 package model
 
-import sdk "github.com/cosmos/cosmos-sdk/types"
+import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+)
 
 type State struct {
 	Height int64 `json:"height"`

@@ -1,15 +1,16 @@
 package state
 
 import (
-	"encoding/json"
 	"io/ioutil"
 
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/marshal"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 )
 
 func NewFileState(filePath string) *fileState {
 	return &fileState{
-		filePath: filePath,
+		filePath:  filePath,
+		marshaler: marshal.NewJsonMarshaler(),
 	}
 }
 
@@ -20,7 +21,7 @@ func (s fileState) GetState() (model.State, error) {
 	}
 
 	state := model.State{}
-	if err := json.Unmarshal([]byte(fileData), &state); err != nil {
+	if err := s.marshaler.Unmarshal([]byte(fileData), &state); err != nil {
 		return model.State{}, err
 	}
 
@@ -28,7 +29,7 @@ func (s fileState) GetState() (model.State, error) {
 }
 
 func (s fileState) UpdateState(state model.State) error {
-	fileData, err := json.Marshal(state)
+	fileData, err := s.marshaler.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -41,5 +42,11 @@ func (s fileState) UpdateState(state model.State) error {
 }
 
 type fileState struct {
-	filePath string
+	filePath  string
+	marshaler marshaler
+}
+
+type marshaler interface {
+	Unmarshal(data []byte, v any) error
+	Marshal(v any) ([]byte, error)
 }

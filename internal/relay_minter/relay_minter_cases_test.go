@@ -1,7 +1,6 @@
 package relayminter
 
 import (
-	"errors"
 	"testing"
 
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
@@ -140,7 +139,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
 		{
-			name: "ShoulSkipIfFailedToFetchDataForGivenNFT",
+			name: "ShoulSkipRefundIfWhenSubtractingGasFeesTheAmountIsNegative",
 
 			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -150,8 +149,8 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 				"{\"uid\":\"nftuid#0\"}",
 			}, encodingConfig, ""),
 
-			expectedError:       errors.New("data for NFT 'nftuid#0' not found"),
-			expectedLogOutput:   "",
+			expectedError:       nil,
+			expectedLogOutput:   "during refund received amount without gas (-5004999999999900) is smaller than minimum refund amount (5000000000000000000)\r\nfailed to mint: nft (nftuid#0) was not found",
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
@@ -432,7 +431,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			},
 		},
 		{
-			name: "ShouldSuccessfullyRefundNftIfCoinsLessThanPriceWithGas",
+			name: "ShouldSuccessfullyRefundIfCoinsLessThanPriceWithGas",
 
 			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -447,6 +446,43 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			expectedOutputMemos: []string{""},
 			expectedOutputMsgs: []sdk.Msg{
 				banktypes.NewMsgSend(wallet, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Sub(sdk.NewIntFromUint64(5005000000000000))))),
+			},
+		},
+		{
+			name: "ShouldSuccessfullyRefundIfNftDataNotFound",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
+				},
+			}, []string{
+				"{\"uid\":\"notfoundnftuid\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       nil,
+			expectedLogOutput:   "failed to mint: nft (notfoundnftuid) was not found",
+			expectedOutputMemos: []string{""},
+			expectedOutputMsgs: []sdk.Msg{
+				banktypes.NewMsgSend(wallet, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Sub(sdk.NewIntFromUint64(5005000000000000))))),
+			},
+		},
+		{
+			name: "ShouldSuccessfullyMintNftEvenIfMarkingFails",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#3\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       nil,
+			expectedLogOutput:   "failed marking nft (nftuid#3) as minted: not found",
+			expectedOutputMemos: []string{""},
+			expectedOutputMsgs: []sdk.Msg{
+				marketplacetypes.NewMsgMintNft(wallet.String(), "testdenom", buyer1.String(), "test nft name", "test nft uri", "test nft data", "nftuid#3",
+					sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000))),
 			},
 		},
 		{

@@ -7,7 +7,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/simapp/params"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	auth "github.com/cosmos/cosmos-sdk/x/auth/types"
-	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"google.golang.org/grpc"
 )
 
@@ -15,7 +14,6 @@ func NewAccountInfoClient(grpcConn *grpc.ClientConn, encodingConfig *params.Enco
 	return &accountInfoClient{
 		encodingConfig: encodingConfig,
 		authClient:     auth.NewQueryClient(grpcConn),
-		bankClient:     bank.NewQueryClient(grpcConn),
 	}
 }
 
@@ -39,5 +37,4 @@ func (aic *accountInfoClient) QueryInfo(ctx context.Context, address string) (mo
 type accountInfoClient struct {
 	encodingConfig *params.EncodingConfig
 	authClient     auth.QueryClient
-	bankClient     bank.QueryClient
 }

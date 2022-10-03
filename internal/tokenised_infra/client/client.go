@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,10 +11,11 @@ import (
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 )
 
-func NewTokenisedInfraClient(url string) *tokenisedInfraClient {
+func NewTokenisedInfraClient(url string, marshaler marshaler) *tokenisedInfraClient {
 	return &tokenisedInfraClient{
-		url:    url,
-		client: &http.Client{Timeout: clientTimeout},
+		url:       url,
+		client:    &http.Client{Timeout: clientTimeout},
+		marshaler: marshaler,
 	}
 }
 
@@ -30,27 +30,17 @@ func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (mo
 		return model.NFTData{}, err
 	}
 
-	if res.Body != nil {
-		defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound {
+		return model.NFTData{}, nil
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return model.NFTData{}, err
-	}
-
-	nft := model.NFTData{}
-	if err := json.Unmarshal(body, &nft); err != nil {
-		return model.NFTData{}, err
-	}
-
-	return nft, nil
+	return tic.parseBody(res)
 }
 
 // TODO: This call should be authenticated
 
 func (tic *tokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) error {
-	markNftData, err := json.Marshal(nftUid{UID: uid})
+	markNftData, err := tic.marshaler.Marshal(nftUid{UID: uid})
 	if err != nil {
 		return err
 	}
@@ -73,13 +63,37 @@ func (tic *tokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) 
 	return nil
 }
 
+func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, error) {
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return model.NFTData{}, err
+	}
+
+	nft := model.NFTData{}
+	if err := tic.marshaler.Unmarshal(body, &nft); err != nil {
+		return model.NFTData{}, err
+	}
+
+	return nft, nil
+}
+
+type marshaler interface {
+	Unmarshal(data []byte, v any) error
+	Marshal(v any) ([]byte, error)
+}
+
 type nftUid struct {
 	UID string `json:"uid"`
 }
 
 type tokenisedInfraClient struct {
-	url    string
-	client *http.Client
+	url       string
+	client    *http.Client
+	marshaler marshaler
 }
 
 const (

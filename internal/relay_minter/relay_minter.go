@@ -12,18 +12,19 @@ import (
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	queryacc "github.com/CudoVentures/cudos-ondemand-minting-service/internal/query/account"
 	relaytx "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
-	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/tendermint/tendermint/libs/bytes"
+	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	"google.golang.org/grpc"
+	ggrpc "google.golang.org/grpc"
 )
 
-func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage, nftDataClient nftDataClient, privKey *secp256k1.PrivKey) *relayMinter {
+func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage,
+	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector) *relayMinter {
 	return &relayMinter{
 		encodingConfig: encodingConfig,
 		config:         cfg,
@@ -32,6 +33,8 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		nftDataClient:  nftDataClient,
 		logger:         logger,
 		walletAddress:  sdk.AccAddress(privKey.PubKey().Address()),
+		grpcConnector:  grpcConnector,
+		rpcConnector:   rpcConnector,
 	}
 }
 
@@ -48,7 +51,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 
 	for retries < rm.config.MaxRetries {
 
-		grpcConn, err := grpc.Dial(rm.config.Chain.GRPC, grpc.WithInsecure())
+		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.Chain.GRPC)
 		if err != nil {
 			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.Chain.GRPC, err))
 			continue
@@ -56,7 +59,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 
 		defer grpcConn.Close()
 
-		node, err := client.NewClientFromNode(rm.config.Chain.RPC)
+		node, err := rm.rpcConnector.MakeRPCClient(rm.config.Chain.RPC)
 		if err != nil {
 			retry(fmt.Errorf("connecting (%s) failed: %s", rm.config.Chain.RPC, err))
 			continue
@@ -93,6 +96,8 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 		}
 	}
 }
+
+// TODO: Add info logging
 
 // Get bank transfers to our address with height > s.Height
 // Start iterating them
@@ -329,14 +334,12 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 	walletAddress, err := sdk.AccAddressFromBech32(rm.walletAddress.String())
 	if err != nil {
-		rm.logger.Error(fmt.Errorf("invalid wallet address (%s) during refund: %s", rm.walletAddress, err))
-		return nil
+		return fmt.Errorf("invalid wallet address (%s) during refund: %s", rm.walletAddress, err)
 	}
 
 	refundAddress, err := sdk.AccAddressFromBech32(refundReceiver)
 	if err != nil {
-		rm.logger.Error(fmt.Errorf("invalid refund receiver address (%s) during refund: %s", refundReceiver, err))
-		return nil
+		return fmt.Errorf("invalid refund receiver address (%s) during refund: %s", refundReceiver, err)
 	}
 
 	msgSend := banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(amount))
@@ -348,8 +351,6 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice)))
 
-	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
-
 	// We want to have some min refund amount to prevent DoS
 	if amountWithoutGas.LT(sdk.NewIntFromUint64(minRefundAmount)) {
 		rm.logger.Error(fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)",
@@ -357,10 +358,17 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 		return nil
 	}
 
+	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
+
 	return rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, txHash, gasResult)
 }
 
 func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
+	emptyNftData := model.NFTData{}
+	if nftData == emptyNftData {
+		return fmt.Errorf("nft (%s) was not found", uid)
+	}
+
 	if nftData.Status != model.ApprovedNFTStatus {
 		return fmt.Errorf("nft (%s) has invalid status (%s)", uid, nftData.Status)
 	}
@@ -373,7 +381,13 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 		return err
 	}
 
-	amountWithoutGas := amount.Amount.Sub(sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice)))
+	gas := sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice))
+	if gas.GT(amount.Amount) {
+		return fmt.Errorf("during mint received amount (%d) is smaller than the gas (%d)",
+			amount.Amount.Uint64(), gas.Uint64())
+	}
+
+	amountWithoutGas := amount.Amount.Sub(gas)
 
 	if amountWithoutGas.LT(nftData.Price.Amount) {
 		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)",
@@ -410,6 +424,8 @@ type relayMinter struct {
 	txQuerier      txQuerier
 	nftDataClient  nftDataClient
 	logger         relayLogger
+	grpcConnector  grpcConnector
+	rpcConnector   rpcConnector
 }
 
 type mintMemo struct {
@@ -448,4 +464,12 @@ type nftDataClient interface {
 
 type relayLogger interface {
 	Error(err error)
+}
+
+type grpcConnector interface {
+	MakeGRPCClient(url string) (*ggrpc.ClientConn, error)
+}
+
+type rpcConnector interface {
+	MakeRPCClient(url string) (*rpchttp.HTTP, error)
 }

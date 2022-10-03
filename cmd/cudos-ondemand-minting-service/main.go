@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
 	cudosapp "github.com/CudoVentures/cudos-node/app"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	encodingconfig "github.com/CudoVentures/cudos-ondemand-minting-service/internal/encoding_config"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/grpc"
 	key "github.com/CudoVentures/cudos-ondemand-minting-service/internal/key"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/logger"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/marshal"
 	relayminter "github.com/CudoVentures/cudos-ondemand-minting-service/internal/relay_minter"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/rpc"
 	state "github.com/CudoVentures/cudos-ondemand-minting-service/internal/state"
 	infraclient "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tokenised_infra/client"
 	"github.com/rs/zerolog"
@@ -22,12 +24,10 @@ func main() {
 }
 
 func runService(ctx context.Context) {
-	cfg, err := config.NewConfig("config.yaml")
 
-	zlogger := logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger())
-
+	cfg, err := config.NewConfig(configFilename)
 	if err != nil {
-		zlogger.Fatal(fmt.Errorf("creating config failed: %s", err))
+		fmt.Printf("creating config failed: %s", err)
 		return
 	}
 
@@ -36,15 +36,18 @@ func runService(ctx context.Context) {
 
 	state := state.NewFileState(cfg.StateFile)
 
-	infraClient := infraclient.NewTokenisedInfraClient(cfg.TokenisedInfraUrl)
+	infraClient := infraclient.NewTokenisedInfraClient(cfg.TokenisedInfraUrl, marshal.NewJsonMarshaler())
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {
-		zlogger.Fatal(errors.New("failed to create private key from wallet mnemonic"))
+		fmt.Println("failed to create private key from wallet mnemonic")
 		return
 	}
 
-	minter := relayminter.NewRelayMinter(zlogger, &encodingConfig, cfg, state, infraClient, privKey)
+	minter := relayminter.NewRelayMinter(logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger()),
+		&encodingConfig, cfg, state, infraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{})
 
 	minter.Start(ctx)
 }
+
+var configFilename = "config.yaml"

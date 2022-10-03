@@ -56,7 +56,9 @@ curl http://127.0.0.1:19999
 
 echo "START UNIT TESTS"
 #TODO: Move unit tests on top and have here some realiable way to know that the minting service exited
-go test -timeout 30s -v -cover -covermode=count -coverprofile unittests.out -run ^TestRelayMinter$ ./internal/relay_minter
+go test -timeout 30s -v -cover -covermode=count -coverprofile unittests1.out -run ^TestShouldExitIfInvalidConfigFilename$ ./cmd/cudos-ondemand-minting-service
+go test -timeout 30s -v -cover -covermode=count -coverprofile unittests2.out -run ^TestShouldExitIfConfigContainsInvalidMnemonic$ ./cmd/cudos-ondemand-minting-service
+go test -timeout 30s -v -cover -covermode=count -coverprofile unittests3.out ./internal/...
 #GO111MODULE=off go get github.com/wadey/gocovmerge
 gocovmerge *.out > merged.cov
 go tool cover -func=merged.cov | grep -E '^total\:' | sed -E 's/\s+/ /g'

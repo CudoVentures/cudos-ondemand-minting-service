@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
-func NewTxQuerier(node *rpchttp.HTTP) *txQuerier {
+func NewTxQuerier(node txSearcher) *txQuerier {
 	return &txQuerier{node: node}
 }
 
@@ -26,5 +25,9 @@ func (tq *txQuerier) Query(ctx context.Context, query string) (*ctypes.ResultTxS
 const txSearchTimeout = 10 * time.Second
 
 type txQuerier struct {
-	node *rpchttp.HTTP
+	node txSearcher
+}
+
+type txSearcher interface {
+	TxSearch(ctx context.Context, query string, prove bool, page, perPage *int, orderBy string) (*ctypes.ResultTxSearch, error)
 }

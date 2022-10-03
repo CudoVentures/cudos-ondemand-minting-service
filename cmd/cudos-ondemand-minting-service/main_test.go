@@ -19,6 +19,16 @@ func TestRun(t *testing.T) {
 	killServer.server.Shutdown(context.Background())
 }
 
+func TestShouldExitIfInvalidConfigFilename(t *testing.T) {
+	configFilename = "invalid config.yaml"
+	main()
+}
+
+func TestShouldExitIfConfigContainsInvalidMnemonic(t *testing.T) {
+	configFilename = "./testdata/invalid_mnemonic_config.yaml"
+	main()
+}
+
 func newKillServer(addr string, cancel context.CancelFunc) *killServer {
 	return &killServer{
 		server: http.Server{
