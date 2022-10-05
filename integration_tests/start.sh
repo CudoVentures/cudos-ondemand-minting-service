@@ -1,3 +1,4 @@
+exit 1
 cd ./integration_tests
 
 source ./setup_node.sh
