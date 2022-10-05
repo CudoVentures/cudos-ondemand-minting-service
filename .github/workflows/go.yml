@@ -8,14 +8,12 @@ on:
 jobs:
 
   Test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.18
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
 
     - name: Test
-      run: ./integration_tests/start.sh
+      run: ./start_integration_tests.sh
