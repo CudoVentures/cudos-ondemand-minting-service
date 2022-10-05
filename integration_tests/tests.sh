@@ -1,8 +1,9 @@
 CHAIN_ID='cudos-local-network'
 FEE_FLAGS='--gas auto --gas-adjustment 1.3 --gas-prices 5000000000000acudos'
 WALLET_ADDRESS='cudos1a326k254fukx9jlp0h3fwcr2ymjgludzum67dv'
-CUDOS_NODED_RUNNING_INSTANCE_PATH='/Users/angelvalkov/git/cudos-node'
-CURRENT_DIR=$PWD
+WORKDIR=$PWD
+CUDOS_NODED_RUNNING_INSTANCE_PATH=$WORKDIR'/integration_tests/cudos-builders/tools-nodejs/init-local-node-without-docker'
+EXPECTED_COVERAGE='100.0'
 
 # COMPILE MOCK SERVICE
 go build ./cmd/mock-service
@@ -46,19 +47,29 @@ cudos-noded tx marketplace verify-collection 0 --keyring-backend test --chain-id
 echo "BANK SEND WITH VALID MEMO"
 cudos-noded tx bank send minting-tester "$WALLET_ADDRESS" 9000000000000000000acudos --note="{\"uid\":\"nftuid1\"}" --keyring-backend test --chain-id="$CHAIN_ID" $FEE_FLAGS -y
 
-cd $CURRENT_DIR
+cd $WORKDIR
 
 echo "WAIT FOR INTEGRATION TESTS TO COMPLETE"
+# TODO: Have some smarter way to wait for tests to complete
 sleep 20
 
 echo "STOP INTEGRATION TESTS"
 curl http://127.0.0.1:19999
 
 echo "START UNIT TESTS"
-#TODO: Move unit tests on top and have here some realiable way to know that the minting service exited
 go test -timeout 30s -v -cover -covermode=count -coverprofile unittests1.out -run ^TestShouldExitIfInvalidConfigFilename$ ./cmd/cudos-ondemand-minting-service
 go test -timeout 30s -v -cover -covermode=count -coverprofile unittests2.out -run ^TestShouldExitIfConfigContainsInvalidMnemonic$ ./cmd/cudos-ondemand-minting-service
 go test -timeout 30s -v -cover -covermode=count -coverprofile unittests3.out ./internal/...
-#GO111MODULE=off go get github.com/wadey/gocovmerge
+
+GO111MODULE=off go get github.com/wadey/gocovmerge
 gocovmerge *.out > merged.cov
 go tool cover -func=merged.cov | grep -E '^total\:' | sed -E 's/\s+/ /g'
+
+COVERAGE=$(go tool cover -func merged.cov | grep total | awk '{print substr($3, 1, length($3)-1)}')
+
+if [ "$COVERAGE" != "$EXPECTED_COVERAGE" ];then
+    echo "Expected coverage is $EXPECTED_COVERAGE but actual is $COVERAGE"
+    exit 1
+fi
+
+echo "Successfully passed tests!"
