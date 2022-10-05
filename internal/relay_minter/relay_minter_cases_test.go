@@ -1,6 +1,7 @@
 package relayminter
 
 import (
+	"errors"
 	"testing"
 
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
@@ -54,6 +55,22 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 
 			expectedError:       nil,
 			expectedLogOutput:   "getting received bank send info failed: unmarshaling memo (nftuid#1) failed: invalid character 'f' in literal null (expecting 'u')",
+			expectedOutputMemos: []string{},
+			expectedOutputMsgs:  []sdk.Msg{},
+		},
+		{
+			name: "ShouldSkipWhenBankSendMemoHasEmptyUID",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
+				},
+			}, []string{
+				"{\"uid\":\"\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       nil,
+			expectedLogOutput:   "getting received bank send info failed: empty memo UID in transaction ()",
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
@@ -486,6 +503,80 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			},
 		},
 		{
+			name: "ShouldFailIfGettingNftDataFails",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#4\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       errors.New("not found"),
+			expectedLogOutput:   "",
+			expectedOutputMemos: []string{},
+			expectedOutputMsgs:  []sdk.Msg{},
+		},
+		{
+			name: "ShouldFailRelayIfAllSendTxFail",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#1\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       errors.New("failed to mint: failed to send tx, failed to refund: failed to send tx"),
+			expectedLogOutput:   "",
+			expectedOutputMemos: []string{},
+			expectedOutputMsgs:  []sdk.Msg{},
+			failAllSendTx:       true,
+		},
+		{
+			name: "ShouldFailRelayIfIsMintedCheckFails",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#1\"}",
+			}, encodingConfig, ""),
+
+			expectedError:       errors.New("failed to query mint txs"),
+			expectedLogOutput:   "",
+			expectedOutputMemos: []string{},
+			expectedOutputMsgs:  []sdk.Msg{},
+			failMintTxsQuery:    true,
+		},
+		{
+			name: "ShouldFailRelayIfAlreadyMintedAndRefundFails",
+
+			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
+				},
+			}, []string{
+				"{\"uid\":\"nftuid#1\"}",
+			}, encodingConfig, ""),
+			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
+				{
+					marketplacetypes.NewMsgMintNft(wallet.String(), "", buyer1.String(), "", "", "", "nftuid#1", sdk.NewCoin("acudos", sdk.NewIntFromUint64(100))),
+				},
+			}, []string{
+				"nftuid#1",
+			}, encodingConfig, ""),
+
+			expectedError:       errors.New("failed to send tx, failed to refund"),
+			expectedLogOutput:   "already minted nftuid#1",
+			expectedOutputMemos: []string{},
+			expectedOutputMsgs:  []sdk.Msg{},
+			failAllSendTx:       true,
+		},
+		{
 			name: "ShouldSuccessfullyMintNft",
 
 			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
@@ -512,10 +603,12 @@ type testCase struct {
 	receivedBankSendTxs *ctypes.ResultTxSearch
 	sentBankSendTxs     *ctypes.ResultTxSearch
 	mintTxs             *ctypes.ResultTxSearch
+	failMintTxsQuery    bool
 	expectedError       error
 	expectedLogOutput   string
 	expectedOutputMemos []string
 	expectedOutputMsgs  []sdk.Msg
+	failAllSendTx       bool
 }
 
 func buildTestResultTxSearch(t *testing.T, msgs [][]sdk.Msg, memos []string, encodingConfig *params.EncodingConfig, txHash string) *ctypes.ResultTxSearch {

@@ -13,10 +13,13 @@ import (
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/key"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/rpc"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
+	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmtypes "github.com/tendermint/tendermint/types"
 	ggrpc "google.golang.org/grpc"
 )
 
@@ -53,20 +56,25 @@ func TestRelay(t *testing.T) {
 			DenomID: "testdenom",
 			Status:  model.ApprovedNFTStatus,
 		},
-	}, map[string]error{
-		"nftuid#3": errors.New("not found"),
-	})
+	},
+		map[string]error{
+			"nftuid#4": errors.New("not found"),
+		},
+		map[string]error{
+			"nftuid#3": errors.New("not found"),
+		})
 	mockLogger := newMockLogger()
 
 	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, mockStatesStorage,
-		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{})
+		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
 
 	testCases := buildTestCases(t, &encodingConfig, relayMinter.walletAddress)
 
 	for i := 0; i < len(testCases); i++ {
 
-		relayMinter.txQuerier = newMockTxQuerier(testCases[i].receivedBankSendTxs, testCases[i].mintTxs, testCases[i].sentBankSendTxs)
-		mts := newMockTxSender()
+		relayMinter.txQuerier = newMockTxQuerier(testCases[i].receivedBankSendTxs, testCases[i].mintTxs,
+			testCases[i].sentBankSendTxs, testCases[i].failMintTxsQuery)
+		mts := newMockTxSender(testCases[i].failAllSendTx)
 		relayMinter.txSender = mts
 
 		mockLogger = newMockLogger()
@@ -95,7 +103,7 @@ func TestShouldRetryIfGRPCConnectionFails(t *testing.T) {
 		MaxRetries:    10,
 	}
 	grpcConnector := mockGRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{})
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -115,7 +123,7 @@ func TestShouldRetryIfRPCConnectionFails(t *testing.T) {
 		MaxRetries:    10,
 	}
 	rpcConnector := mockRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector, tx.NewTxCoder(&encodingConfig))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -129,7 +137,7 @@ func TestShouldFailMintIfEstimateGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
 
 	gasEstimateFail := errors.New("failed to estimate gas")
 	mcts := mockCallsTxSender{}
@@ -147,7 +155,7 @@ func TestShouldFailMintIfReceivedAmountIsSmallerThanTheGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
 
 	mcts := mockCallsTxSender{}
 	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
@@ -168,7 +176,7 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
 
 	sendTxFail := errors.New("failed to send tx")
 	mcts := mockCallsTxSender{}
@@ -184,6 +192,208 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",
 		nftData, sdk.NewCoin("acudos", sdk.NewIntFromUint64(10000000000000000)))
 	require.Equal(t, sendTxFail, err)
+}
+
+func TestShouldFailRefundIfParsingWalletAddressFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
+	relayMinter.walletAddress = sdk.AccAddress{}
+
+	err = relayMinter.refund(context.Background(), "txHash", "refundReceiver", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid wallet address")
+}
+
+func TestShouldFailRefundIfParsingRefundReceiverAddressFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
+
+	err = relayMinter.refund(context.Background(), "txHash", "refundReceiver", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid refund receiver address")
+}
+
+func TestShouldFailRefundIfEstimateGasFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
+
+	gasEstimateFail := errors.New("failed to estimate gas")
+	mcts := mockCallsTxSender{}
+	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{}, gasEstimateFail)
+	relayMinter.txSender = &mcts
+
+	err = relayMinter.refund(context.Background(), "txHash", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	require.Equal(t, gasEstimateFail, err)
+}
+
+func TestShouldFailRefundIfIsRefundFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	txQuerier := mockCallsTxQuerier{}
+	failedQuery := errors.New("failed query")
+	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	relayMinter.txQuerier = &txQuerier
+
+	err = relayMinter.refund(context.Background(), "txHash", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	require.Equal(t, failedQuery, err)
+}
+
+func TestShouldFailIsMintedIfQueryFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+
+	txQuerier := mockCallsTxQuerier{}
+	failedQuery := errors.New("failed query")
+	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	relayMinter.txQuerier = &txQuerier
+
+	isMinted, err := relayMinter.isMinted(context.Background(), "testuid")
+	require.Equal(t, false, isMinted)
+	require.Equal(t, failedQuery, err)
+}
+
+func TestIsMintedShouldLogErrorIfDecodingTxFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+
+	txQuerier := mockCallsTxQuerier{}
+	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{
+		Txs: []*ctypes.ResultTx{
+			{},
+		},
+	}, nil)
+	relayMinter.txQuerier = &txQuerier
+
+	mctc := mockTxCoder{}
+	mctc.On("Decode", mock.Anything, mock.Anything).Return(&txWithoutMemo{}, nil)
+	relayMinter.txCoder = &mctc
+
+	isMinted, err := relayMinter.isMinted(context.Background(), "testuid")
+	require.Equal(t, false, isMinted)
+	require.NoError(t, err)
+	require.Equal(t, "during check if minted, decoding tx () failed: invalid transaction () type", mockLogger.output)
+}
+
+func TestShouldRetryRelayingIfRelayFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockLogger := newMockLogger()
+	encodingConfig := encodingconfig.MakeEncodingConfig()
+	cfg := config.Config{
+		PaymentDenom:  "acudos",
+		RelayInterval: 1 * time.Second,
+		RetryInterval: 1 * time.Second,
+		MaxRetries:    10,
+		Chain: struct {
+			ID   string "yaml:\"id\""
+			RPC  string "yaml:\"rpc\""
+			GRPC string "yaml:\"grpc\""
+		}{
+			ID:   "cudos-local-network",
+			RPC:  "http://127.0.0.1:26657",
+			GRPC: "127.0.0.1:9090",
+		},
+	}
+
+	failedGettingState := errors.New("failed getting state")
+
+	mcss := mockCallsStateStorage{}
+	mcss.On("GetState").Return(model.State{}, failedGettingState)
+
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, &mcss, nil, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go relayMinter.Start(ctx)
+	<-ctx.Done()
+
+	require.Contains(t, mockLogger.output, failedGettingState.Error())
+}
+
+func TestShouldFailRelayIfQueryFails(t *testing.T) {
+	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
+	require.NoError(t, err)
+
+	mockStatesStorage := newMockState()
+
+	relayMinter := NewRelayMinter(nil, nil, config.Config{}, mockStatesStorage, nil, privKey, nil, nil, nil)
+	txQuerier := mockCallsTxQuerier{}
+	failedQuery := errors.New("failed query")
+	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	relayMinter.txQuerier = &txQuerier
+
+	err = relayMinter.relay(context.Background())
+	require.Equal(t, failedQuery, err)
+}
+
+type mockCallsStateStorage struct {
+	mock.Mock
+}
+
+func (mcss *mockCallsStateStorage) GetState() (model.State, error) {
+	args := mcss.Called()
+	return args.Get(0).(model.State), args.Error(1)
+}
+
+func (mcss *mockCallsStateStorage) UpdateState(state model.State) error {
+	args := mcss.Called(state)
+	return args.Error(0)
+}
+
+type mockTxCoder struct {
+	mock.Mock
+}
+
+func (mctc *mockTxCoder) Decode(tx tmtypes.Tx) (sdk.Tx, error) {
+	args := mctc.Called(tx)
+	return args.Get(0).(sdk.Tx), args.Error(1)
+}
+
+type txWithoutMemo struct {
+}
+
+func (twm *txWithoutMemo) GetMsgs() []sdk.Msg {
+	return nil
+}
+
+func (twm *txWithoutMemo) ValidateBasic() error {
+	return nil
+}
+
+type mockCallsTxQuerier struct {
+	mock.Mock
+}
+
+func (mctq *mockCallsTxQuerier) Query(ctx context.Context, query string) (*ctypes.ResultTxSearch, error) {
+	args := mctq.Called(ctx, query)
+	return args.Get(0).(*ctypes.ResultTxSearch), args.Error(1)
 }
 
 type mockCallsTxSender struct {

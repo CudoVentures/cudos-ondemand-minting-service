@@ -16,6 +16,7 @@ import (
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/rpc"
 	state "github.com/CudoVentures/cudos-ondemand-minting-service/internal/state"
 	infraclient "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tokenised_infra/client"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
 	"github.com/rs/zerolog"
 )
 
@@ -45,7 +46,7 @@ func runService(ctx context.Context) {
 	}
 
 	minter := relayminter.NewRelayMinter(logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger()),
-		&encodingConfig, cfg, state, infraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{})
+		&encodingConfig, cfg, state, infraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
 
 	minter.Start(ctx)
 }

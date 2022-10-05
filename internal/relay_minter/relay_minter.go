@@ -20,11 +20,12 @@ import (
 	"github.com/tendermint/tendermint/libs/bytes"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	tmtypes "github.com/tendermint/tendermint/types"
 	ggrpc "google.golang.org/grpc"
 )
 
 func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage,
-	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector) *relayMinter {
+	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder) *relayMinter {
 	return &relayMinter{
 		encodingConfig: encodingConfig,
 		config:         cfg,
@@ -35,6 +36,7 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		walletAddress:  sdk.AccAddress(privKey.PubKey().Address()),
 		grpcConnector:  grpcConnector,
 		rpcConnector:   rpcConnector,
+		txCoder:        txCoder,
 	}
 }
 
@@ -68,7 +70,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		defer node.Stop()
 
 		rm.txSender = relaytx.NewTxSender(txtypes.NewServiceClient(grpcConn), queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
-			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom, gasPrice, gasAdjustment)
+			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom, gasPrice, gasAdjustment, relaytx.NewTxSigner(rm.encodingConfig, rm.privKey))
 		rm.txQuerier = relaytx.NewTxQuerier(node)
 
 		err = rm.startRelaying(ctx)
@@ -135,7 +137,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 
 		if isMinted {
 			if err := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); err != nil {
-				return err
+				return fmt.Errorf("%s, failed to refund", err)
 			}
 
 			continue
@@ -163,14 +165,15 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 }
 
 func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, error) {
-	tx, err := rm.encodingConfig.TxConfig.TxDecoder()(resultTx.Tx)
+	tx, err := rm.txCoder.Decode(resultTx.Tx)
 	if err != nil {
 		return nil, fmt.Errorf("decoding transaction (%s) result failed: %s", resultTx.Hash.String(), err)
 	}
 
 	txWithMemo, ok := tx.(sdk.TxWithMemo)
 	if !ok {
-		return nil, fmt.Errorf("invalid transaction (%s) type: %s", resultTx.Hash.String(), err)
+		fmt.Println("Typecast failed")
+		return nil, fmt.Errorf("invalid transaction (%s) type", resultTx.Hash.String())
 	}
 
 	return txWithMemo, nil
@@ -426,6 +429,7 @@ type relayMinter struct {
 	logger         relayLogger
 	grpcConnector  grpcConnector
 	rpcConnector   rpcConnector
+	txCoder        txCoder
 }
 
 type mintMemo struct {
@@ -446,6 +450,10 @@ type receivedBankSend struct {
 type stateStorage interface {
 	GetState() (model.State, error)
 	UpdateState(state model.State) error
+}
+
+type txCoder interface {
+	Decode(tx tmtypes.Tx) (sdk.Tx, error)
 }
 
 type txSender interface {

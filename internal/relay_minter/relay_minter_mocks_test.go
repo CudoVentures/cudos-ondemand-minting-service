@@ -2,6 +2,7 @@ package relayminter
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
@@ -26,14 +27,19 @@ type mockState struct {
 	state model.State
 }
 
-func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData, markNftErrors map[string]error) *mockTokenisedInfraClient {
+func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData, getNftDataErrors, markNftErrors map[string]error) *mockTokenisedInfraClient {
 	return &mockTokenisedInfraClient{
-		nftDataEntires: nftDataEntires,
-		markNftErrors:  markNftErrors,
+		nftDataEntires:   nftDataEntires,
+		getNftDataErrors: getNftDataErrors,
+		markNftErrors:    markNftErrors,
 	}
 }
 
 func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
+	if err, ok := mtic.getNftDataErrors[uid]; ok {
+		return model.NFTData{}, err
+	}
+
 	if data, ok := mtic.nftDataEntires[uid]; ok {
 		return data, nil
 	}
@@ -49,15 +55,18 @@ func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid str
 }
 
 type mockTokenisedInfraClient struct {
-	nftDataEntires map[string]model.NFTData
-	markNftErrors  map[string]error
+	nftDataEntires   map[string]model.NFTData
+	getNftDataErrors map[string]error
+	markNftErrors    map[string]error
 }
 
-func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResults *ctypes.ResultTxSearch, refundQueryResults *ctypes.ResultTxSearch) *mockTxQuerier {
+func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResults *ctypes.ResultTxSearch,
+	refundQueryResults *ctypes.ResultTxSearch, failMintTxsQuery bool) *mockTxQuerier {
 	return &mockTxQuerier{
 		bankSendQueryResults: bankSendQueryResults,
 		mintQueryResults:     mintQueryResults,
 		refundQueryResults:   refundQueryResults,
+		failMintTxsQuery:     failMintTxsQuery,
 	}
 }
 
@@ -67,6 +76,9 @@ func (mq *mockTxQuerier) Query(ctx context.Context, query string) (*ctypes.Resul
 	} else if strings.Contains(query, "transfer.sender") {
 		return mq.refundQueryResults, nil
 	} else if strings.Contains(query, "marketplace_mint_nft") {
+		if mq.failMintTxsQuery {
+			return nil, errors.New("failed to query mint txs")
+		}
 		return mq.mintQueryResults, nil
 	}
 
@@ -77,12 +89,14 @@ type mockTxQuerier struct {
 	bankSendQueryResults *ctypes.ResultTxSearch
 	mintQueryResults     *ctypes.ResultTxSearch
 	refundQueryResults   *ctypes.ResultTxSearch
+	failMintTxsQuery     bool
 }
 
-func newMockTxSender() *mockTxSender {
+func newMockTxSender(failAllSendTx bool) *mockTxSender {
 	return &mockTxSender{
-		outputMemos: []string{},
-		outputMsgs:  []sdk.Msg{},
+		outputMemos:   []string{},
+		outputMsgs:    []sdk.Msg{},
+		failAllSendTx: failAllSendTx,
 	}
 }
 
@@ -94,14 +108,19 @@ func (mts *mockTxSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo s
 }
 
 func (mts *mockTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
+	if mts.failAllSendTx {
+		return errors.New("failed to send tx")
+	}
+
 	mts.outputMsgs = append(mts.outputMsgs, msgs...)
 	mts.outputMemos = append(mts.outputMemos, memo)
 	return nil
 }
 
 type mockTxSender struct {
-	outputMemos []string
-	outputMsgs  []sdk.Msg
+	outputMemos   []string
+	outputMsgs    []sdk.Msg
+	failAllSendTx bool
 }
 
 func newMockLogger() *mockLogger {

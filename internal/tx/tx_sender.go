@@ -6,16 +6,20 @@ import (
 	"fmt"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
+	client "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"
+	auth "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authsign "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	"google.golang.org/grpc"
 )
 
-func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient, encodingConfig *params.EncodingConfig,
-	privKey *secp256k1.PrivKey, chainID, paymentDenom string, gasPrice uint64, gasAdjustment float64) *txSender {
+func NewTxSender(txClient txClient, accInfoClient accountInfoClient, encodingConfig *params.EncodingConfig,
+	privKey *secp256k1.PrivKey, chainID, paymentDenom string, gasPrice uint64, gasAdjustment float64, signer signer) *txSender {
 	return &txSender{
 		txClient:       txClient,
 		accInfoClient:  accInfoClient,
@@ -25,6 +29,7 @@ func NewTxSender(txClient txtypes.ServiceClient, accInfoClient accountInfoClient
 		paymentDenom:   paymentDenom,
 		gasPrice:       gasPrice,
 		gasAdjustment:  gasAdjustment,
+		signer:         signer,
 	}
 }
 
@@ -107,10 +112,10 @@ func (ts *txSender) genTx(msgs []sdk.Msg, memo string, feeAmt sdk.Coins, gas, ac
 	}
 
 	tx := ts.encodingConfig.TxConfig.NewTxBuilder()
-	if err := tx.SetMsgs(msgs...); err != nil {
+	if err := ts.signer.SetMsgs(tx, msgs...); err != nil {
 		return nil, err
 	}
-	if err := tx.SetSignatures(sigs...); err != nil {
+	if err := ts.signer.SetSignatures(tx, sigs...); err != nil {
 		return nil, err
 	}
 
@@ -125,19 +130,19 @@ func (ts *txSender) genTx(msgs []sdk.Msg, memo string, feeAmt sdk.Coins, gas, ac
 		Sequence:      accSeq,
 	}
 
-	signBytes, err := ts.encodingConfig.TxConfig.SignModeHandler().GetSignBytes(signMode, signerData, tx.GetTx())
+	signBytes, err := ts.signer.GetSignBytes(signMode, signerData, tx.GetTx())
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := ts.privKey.Sign(signBytes)
+	sig, err := ts.signer.Sign(signBytes)
 	if err != nil {
 		return nil, err
 	}
 
 	sigs[0].Data.(*signing.SingleSignatureData).Signature = sig
 
-	if err := tx.SetSignatures(sigs...); err != nil {
+	if err := ts.signer.SetSignatures(tx, sigs...); err != nil {
 		return nil, err
 	}
 
@@ -148,8 +153,20 @@ type accountInfoClient interface {
 	QueryInfo(ctx context.Context, address string) (model.AccountInfo, error)
 }
 
+type txClient interface {
+	Simulate(ctx context.Context, in *txtypes.SimulateRequest, opts ...grpc.CallOption) (*txtypes.SimulateResponse, error)
+	BroadcastTx(ctx context.Context, in *txtypes.BroadcastTxRequest, opts ...grpc.CallOption) (*txtypes.BroadcastTxResponse, error)
+}
+
+type signer interface {
+	SetMsgs(tx client.TxBuilder, msgs ...sdk.Msg) error
+	SetSignatures(tx client.TxBuilder, signatures ...signingtypes.SignatureV2) error
+	GetSignBytes(mode signing.SignMode, data auth.SignerData, tx sdk.Tx) ([]byte, error)
+	Sign(msg []byte) ([]byte, error)
+}
+
 type txSender struct {
-	txClient       txtypes.ServiceClient
+	txClient       txClient
 	accInfoClient  accountInfoClient
 	encodingConfig *params.EncodingConfig
 	privKey        *secp256k1.PrivKey
@@ -157,4 +174,5 @@ type txSender struct {
 	paymentDenom   string
 	gasPrice       uint64
 	gasAdjustment  float64
+	signer         signer
 }
