@@ -15,7 +15,7 @@ import (
 
 func main() {
 	r := mux.NewRouter()
-	r.HandleFunc("/nft/minted", getNFTMintedHandler())
+	r.HandleFunc("/nft/minted/check-status", getNFTMintedHandler())
 	r.HandleFunc("/nft", getNFTHandler())
 
 	log.Info().Msg(fmt.Sprintf("Listening on port: %d", listeningPort))
@@ -42,7 +42,7 @@ func getNFTMintedHandler() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
-		var nftUidData nftUid
+		var nftUidData mintTx
 		if err := json.Unmarshal(body, &nftUidData); err != nil {
 			log.Error().Err(fmt.Errorf("error while unmarshalling body: %s", err)).Send()
 			w.WriteHeader(http.StatusBadRequest)
@@ -102,6 +102,7 @@ var nfts = map[string]model.NFTData{
 
 const listeningPort = 8080
 
-type nftUid struct {
-	Uid string `json:"uid"`
+type mintTx struct {
+	TxHash string `json:"tx_hash"`
+	Uid    string `json:"uid"`
 }

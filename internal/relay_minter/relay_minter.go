@@ -363,7 +363,8 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 
-	return rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, txHash, gasResult)
+	_, err = rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, txHash, gasResult)
+	return err
 }
 
 func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
@@ -397,11 +398,12 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 			amountWithoutGas.Uint64(), nftData.Price.Amount.Uint64())
 	}
 
-	if err := rm.txSender.SendTx(ctx, []sdk.Msg{msgMintNft}, "", gasResult); err != nil {
+	txHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgMintNft}, "", gasResult)
+	if err != nil {
 		return err
 	}
 
-	if err := rm.nftDataClient.MarkMintedNFT(ctx, uid); err != nil {
+	if err := rm.nftDataClient.MarkMintedNFT(ctx, txHash, uid); err != nil {
 		rm.logger.Error(fmt.Errorf("failed marking nft (%s) as minted: %s", uid, err))
 	}
 
@@ -458,7 +460,7 @@ type txCoder interface {
 
 type txSender interface {
 	EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error)
-	SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error
+	SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) (string, error)
 }
 
 type txQuerier interface {
@@ -467,7 +469,7 @@ type txQuerier interface {
 
 type nftDataClient interface {
 	GetNFTData(ctx context.Context, uid string) (model.NFTData, error)
-	MarkMintedNFT(ctx context.Context, uid string) error
+	MarkMintedNFT(ctx context.Context, txHash, uid string) error
 }
 
 type relayLogger interface {

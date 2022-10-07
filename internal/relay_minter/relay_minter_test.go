@@ -181,7 +181,7 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 	sendTxFail := errors.New("failed to send tx")
 	mcts := mockCallsTxSender{}
 	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
-	mcts.On("SendTx", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(sendTxFail)
+	mcts.On("SendTx", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", sendTxFail)
 	relayMinter.txSender = &mcts
 
 	nftData := model.NFTData{
@@ -405,9 +405,9 @@ func (mcts *mockCallsTxSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, 
 	return args.Get(0).(model.GasResult), args.Error(1)
 }
 
-func (mcts *mockCallsTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
+func (mcts *mockCallsTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) (string, error) {
 	args := mcts.Called(ctx, msgs, memo, gasResult)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (mgc *mockGRPCConnector) MakeGRPCClient(url string) (*ggrpc.ClientConn, error) {

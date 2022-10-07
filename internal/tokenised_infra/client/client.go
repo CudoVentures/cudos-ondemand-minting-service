@@ -37,10 +37,11 @@ func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (mo
 	return tic.parseBody(res)
 }
 
-// TODO: This call should be authenticated
-
-func (tic *tokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) error {
-	markNftData, err := tic.marshaler.Marshal(nftUid{UID: uid})
+func (tic *tokenisedInfraClient) MarkMintedNFT(ctx context.Context, mintTxHash, uid string) error {
+	markNftData, err := tic.marshaler.Marshal(mintTx{
+		TxHash: mintTxHash,
+		Uid:    uid,
+	})
 	if err != nil {
 		return err
 	}
@@ -86,8 +87,9 @@ type marshaler interface {
 	Marshal(v any) ([]byte, error)
 }
 
-type nftUid struct {
-	UID string `json:"uid"`
+type mintTx struct {
+	TxHash string `json:"tx_hash"`
+	Uid    string `json:"uid"`
 }
 
 type tokenisedInfraClient struct {
@@ -99,5 +101,5 @@ type tokenisedInfraClient struct {
 const (
 	clientTimeout    = time.Second * 10
 	getNFTDataUri    = "/nft"
-	markMintedNFTUri = "/nft/minted"
+	markMintedNFTUri = "/nft/minted/check-status"
 )
