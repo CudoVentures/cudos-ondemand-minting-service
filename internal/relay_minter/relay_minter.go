@@ -46,12 +46,17 @@ func (rm *relayMinter) Start(ctx context.Context) {
 	retry := func(err error) {
 		rm.logger.Error(fmt.Errorf("relaying failed: %v", err))
 
-		time.Sleep(rm.config.RetryInterval)
+		ticker := time.NewTicker(rm.config.RetryInterval)
+
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
 
 		retries += 1
 	}
 
-	for retries < rm.config.MaxRetries {
+	for ctx.Err() == nil && retries < rm.config.MaxRetries {
 
 		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.Chain.GRPC)
 		if err != nil {
