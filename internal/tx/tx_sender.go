@@ -33,23 +33,23 @@ func NewTxSender(txClient txClient, accInfoClient accountInfoClient, encodingCon
 	}
 }
 
-func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
+func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) (string, error) {
 
 	txBytes, err := ts.buildTx(ctx, msgs, memo, gasResult)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	broadcastRes, err := ts.txClient.BroadcastTx(ctx, &txtypes.BroadcastTxRequest{TxBytes: txBytes, Mode: txtypes.BroadcastMode_BROADCAST_MODE_BLOCK})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if broadcastRes.TxResponse == nil || broadcastRes.TxResponse.Code != 0 {
-		return fmt.Errorf("broadcasting of tx failed: %+v", broadcastRes)
+		return "", fmt.Errorf("broadcasting of tx failed: %+v", broadcastRes)
 	}
 
-	return nil
+	return broadcastRes.TxResponse.TxHash, nil
 }
 
 func (ts *txSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {

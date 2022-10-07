@@ -46,7 +46,7 @@ func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string
 	return model.NFTData{}, nil
 }
 
-func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, uid string) error {
+func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, mintedTxHash, uid string) error {
 	err, ok := mtic.markNftErrors[uid]
 	if ok {
 		return err
@@ -107,14 +107,14 @@ func (mts *mockTxSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo s
 	}, nil
 }
 
-func (mts *mockTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) error {
+func (mts *mockTxSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) (string, error) {
 	if mts.failAllSendTx {
-		return errors.New("failed to send tx")
+		return "", errors.New("failed to send tx")
 	}
 
 	mts.outputMsgs = append(mts.outputMsgs, msgs...)
 	mts.outputMemos = append(mts.outputMemos, memo)
-	return nil
+	return "", nil
 }
 
 type mockTxSender struct {

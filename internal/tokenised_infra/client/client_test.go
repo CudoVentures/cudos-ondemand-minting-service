@@ -71,17 +71,17 @@ func TestShouldFailParseBodyWithBodyError(t *testing.T) {
 
 func TestShouldFailMarkMintedNFTWithInvalidUrl(t *testing.T) {
 	client := NewTokenisedInfraClient(badUrl, marshal.NewJsonMarshaler())
-	require.Error(t, client.MarkMintedNFT(context.Background(), "testuid"))
+	require.Error(t, client.MarkMintedNFT(context.Background(), "txhash", "testuid"))
 }
 
 func TestShouldFailMarkMintedNFTWithNotRunningService(t *testing.T) {
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
-	require.Error(t, client.MarkMintedNFT(context.Background(), "testuid"))
+	require.Error(t, client.MarkMintedNFT(context.Background(), "txhash", "testuid"))
 }
 
 func TestShouldFailMarkMintedNFTIfFailsToMarshal(t *testing.T) {
 	client := NewTokenisedInfraClient(localServiceUrl, &mockMarshaler{})
-	require.Equal(t, failedMarshal, client.MarkMintedNFT(context.Background(), "testuid"))
+	require.Equal(t, failedMarshal, client.MarkMintedNFT(context.Background(), "txhash", "testuid"))
 }
 
 func (mm *mockMarshaler) Marshal(v any) ([]byte, error) {

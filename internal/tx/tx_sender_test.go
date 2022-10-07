@@ -37,7 +37,7 @@ func TestShouldFailSendTxIfBroadcastFails(t *testing.T) {
 
 	txSender := NewTxSender(&mTxClient, &mAccInfoClient, &encodingConfig, privKey, "cudos-local-network", "acudos", 1, 1.3, NewTxSigner(&encodingConfig, privKey))
 
-	err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
+	_, err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
 	require.Equal(t, broadcastFailed, err)
 }
 
@@ -54,7 +54,7 @@ func TestShouldFailSendTxIfBrodcastReturnsNilTxResponse(t *testing.T) {
 
 	txSender := NewTxSender(&mTxClient, &mAccInfoClient, &encodingConfig, privKey, "cudos-local-network", "acudos", 1, 1.3, NewTxSigner(&encodingConfig, privKey))
 
-	err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
+	_, err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
 	require.Equal(t, errors.New("broadcasting of tx failed: "), err)
 }
 
@@ -74,7 +74,7 @@ func TestShouldFailSendTxIfBrodcastReturnsTxResponseWithNonZeroCode(t *testing.T
 
 	txSender := NewTxSender(&mTxClient, &mAccInfoClient, &encodingConfig, privKey, "cudos-local-network", "acudos", 1, 1.3, NewTxSigner(&encodingConfig, privKey))
 
-	err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
+	_, err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
 	require.Equal(t, fmt.Errorf("broadcasting of tx failed: %+v", &response), err)
 }
 
@@ -89,7 +89,7 @@ func TestShouldFailSendTxIfBuildingTxFails(t *testing.T) {
 
 	txSender := NewTxSender(&mockTxClient{}, &mAccInfoClient, &encodingConfig, privKey, "cudos-local-network", "acudos", 1, 1.3, NewTxSigner(&encodingConfig, privKey))
 
-	err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
+	_, err = txSender.SendTx(context.Background(), []types.Msg{}, "", model.GasResult{})
 	require.Equal(t, failedQueryInfo, err)
 }
 
