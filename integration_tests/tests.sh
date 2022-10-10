@@ -45,7 +45,7 @@ cudos-noded tx marketplace verify-collection 0 --keyring-backend test --chain-id
 
 # BANK SEND WITH VALID MEMO
 echo "BANK SEND WITH VALID MEMO"
-cudos-noded tx bank send minting-tester "$WALLET_ADDRESS" 9000000000000000000acudos --note="{\"uid\":\"nftuid1\"}" --keyring-backend test --chain-id="$CHAIN_ID" $FEE_FLAGS -y
+cudos-noded tx bank send minting-tester "$WALLET_ADDRESS" 9000000000000000000acudos --note="{\"uuid\":\"nftuid1\"}" --keyring-backend test --chain-id="$CHAIN_ID" $FEE_FLAGS -y
 
 cd $WORKDIR
 
