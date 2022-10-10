@@ -440,7 +440,7 @@ type relayMinter struct {
 }
 
 type mintMemo struct {
-	UID string `json:"uid"`
+	UID string `json:"uuid"`
 }
 
 type refundMemo struct {

@@ -66,7 +66,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"\"}",
+				"{\"uuid\":\"\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -83,7 +83,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -99,7 +99,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgMultiSend(nil, nil),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -115,7 +115,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -131,7 +131,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)), sdk.NewCoin("ucudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -147,7 +147,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("ucudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -163,7 +163,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#0\"}",
+				"{\"uuid\":\"nftuid#0\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -179,7 +179,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -187,7 +187,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					marketplacetypes.NewMsgMintNft(wallet.String(), "", buyer1.String(), "", "", "", "nftuid#1", sdk.NewCoin("acudos", sdk.NewIntFromUint64(100))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -205,14 +205,14 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
 					marketplacetypes.NewMsgBuyNft(wallet.String(), 1),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -230,14 +230,14 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
 					marketplacetypes.NewMsgMintNft(buyer1.String(), "", buyer1.String(), "", "", "", "nftuid#1", sdk.NewCoin("acudos", sdk.NewIntFromUint64(100))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -255,7 +255,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -292,7 +292,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			sentBankSendTxs: &ctypes.ResultTxSearch{Txs: []*ctypes.ResultTx{
 				{Tx: []byte("invalid tx")},
@@ -312,7 +312,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -338,7 +338,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -363,7 +363,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -388,7 +388,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
@@ -413,7 +413,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, "refundhash#1"),
 
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
@@ -437,7 +437,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#2\"}",
+				"{\"uuid\":\"nftuid#2\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -455,7 +455,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -473,7 +473,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"notfoundnftuid\"}",
+				"{\"uuid\":\"notfoundnftuid\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -491,7 +491,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#3\"}",
+				"{\"uuid\":\"nftuid#3\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
@@ -510,7 +510,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#4\"}",
+				"{\"uuid\":\"nftuid#4\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       errors.New("not found"),
@@ -526,7 +526,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       errors.New("failed to mint: failed to send tx, failed to refund: failed to send tx"),
@@ -543,7 +543,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       errors.New("failed to query mint txs"),
@@ -560,7 +560,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 			mintTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
@@ -584,7 +584,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Add(sdk.NewIntFromUint64(5005000000000000))))),
 				},
 			}, []string{
-				"{\"uid\":\"nftuid#1\"}",
+				"{\"uuid\":\"nftuid#1\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
