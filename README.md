@@ -12,8 +12,5 @@
 
 ## Starting the service:
 
-Build the docker image:\
-```docker build -t 'cudos-ondemand-minting-service' .```
-
-Run the docker image:\
-```docker run -d --name cudos-ondemand-minting-service cudos-ondemand-minting-service```
+Build and run the docker image:\
+```docker-compose up -d```
