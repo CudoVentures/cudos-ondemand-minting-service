@@ -312,15 +312,9 @@ func TestShouldRetryRelayingIfRelayFails(t *testing.T) {
 		RelayInterval: 1 * time.Second,
 		RetryInterval: 1 * time.Second,
 		MaxRetries:    10,
-		Chain: struct {
-			ID   string "yaml:\"id\""
-			RPC  string "yaml:\"rpc\""
-			GRPC string "yaml:\"grpc\""
-		}{
-			ID:   "cudos-local-network",
-			RPC:  "http://127.0.0.1:26657",
-			GRPC: "127.0.0.1:9090",
-		},
+		ChainID:       "cudos-local-network",
+		ChainRPC:      "http://127.0.0.1:26657",
+		ChainGRPC:     "127.0.0.1:9090",
 	}
 
 	failedGettingState := errors.New("failed getting state")

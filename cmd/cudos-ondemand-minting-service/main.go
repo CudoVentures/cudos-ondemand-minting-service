@@ -26,7 +26,7 @@ func main() {
 
 func runService(ctx context.Context) {
 
-	cfg, err := config.NewConfig(configFilename)
+	cfg, err := config.NewConfig(envPath)
 	if err != nil {
 		fmt.Printf("creating config failed: %s", err)
 		return
@@ -37,7 +37,7 @@ func runService(ctx context.Context) {
 
 	state := state.NewFileState(cfg.StateFile)
 
-	infraClient := infraclient.NewTokenisedInfraClient(cfg.TokenisedInfraUrl, marshal.NewJsonMarshaler())
+	infraClient := infraclient.NewTokenisedInfraClient(cfg.AuraPoolBackend, marshal.NewJsonMarshaler())
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {
@@ -51,4 +51,4 @@ func runService(ctx context.Context) {
 	minter.Start(ctx)
 }
 
-var configFilename = "config.yaml"
+var envPath = ".env"
