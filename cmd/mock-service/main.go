@@ -104,5 +104,5 @@ const listeningPort = 8080
 
 type mintTx struct {
 	TxHash string `json:"tx_hash"`
-	Uid    string `json:"uid"`
+	Uid    string `json:"uuid"`
 }
