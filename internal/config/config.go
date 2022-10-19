@@ -2,40 +2,68 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"github.com/joho/godotenv"
 )
 
-func NewConfig(configPath string) (Config, error) {
-	config := Config{}
-
-	file, err := os.Open(configPath)
-	if err != nil {
-		return config, err
-	}
-	defer file.Close()
-
-	d := yaml.NewDecoder(file)
-
-	if err := d.Decode(&config); err != nil {
-		return config, err
+func NewConfig(envPath string) (Config, error) {
+	if err := godotenv.Load(envPath); err != nil {
+		return Config{}, err
 	}
 
-	return config, nil
+	return Config{
+		WalletMnemonic:  getEnv("WALLET_MNEMONIC", ""),
+		ChainID:         getEnv("CHAIN_ID", ""),
+		ChainRPC:        getEnv("CHAIN_RPC", ""),
+		ChainGRPC:       getEnv("CHAIN_GRPC", ""),
+		AuraPoolBackend: getEnv("AURA_POOL_BACKEND", ""),
+		StateFile:       getEnv("STATE_FILE", ""),
+		MaxRetries:      getEnvAsInt("MAX_RETRIES", 10),
+		RetryInterval:   getEnvAsDuration("RETRY_INTERVAL", time.Second*30),
+		RelayInterval:   getEnvAsDuration("RELAY_INTERVAL", time.Second*5),
+		PaymentDenom:    getEnv("PAYMENT_DENOM", "acudos"),
+	}, nil
+}
+
+func getEnv(key string, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+
+	return defaultVal
+}
+
+func getEnvAsInt(name string, defaultVal int) int {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
+		return value
+	}
+
+	return defaultVal
+}
+
+func getEnvAsDuration(name string, defaultVal time.Duration) time.Duration {
+	valStr := getEnv(name, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	if duration, err := time.ParseDuration(valStr); err == nil {
+		return duration
+	}
+	return defaultVal
 }
 
 type Config struct {
-	WalletMnemonic string `yaml:"wallet_mnemonic"`
-	Chain          struct {
-		ID   string `yaml:"id"`
-		RPC  string `yaml:"rpc"`
-		GRPC string `yaml:"grpc"`
-	} `yaml:"chain"`
-	TokenisedInfraUrl string        `yaml:"tokenised_infra_url"`
-	StateFile         string        `yaml:"state_file"`
-	MaxRetries        int           `yaml:"max_retries"`
-	RetryInterval     time.Duration `yaml:"retry_interval"`
-	RelayInterval     time.Duration `yaml:"relay_interval"`
-	PaymentDenom      string        `yaml:"payment_denom"`
+	WalletMnemonic  string
+	ChainID         string
+	ChainRPC        string
+	ChainGRPC       string
+	AuraPoolBackend string
+	StateFile       string
+	MaxRetries      int
+	RetryInterval   time.Duration
+	RelayInterval   time.Duration
+	PaymentDenom    string
 }

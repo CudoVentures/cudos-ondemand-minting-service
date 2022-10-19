@@ -20,12 +20,12 @@ func TestRun(t *testing.T) {
 }
 
 func TestShouldExitIfInvalidConfigFilename(t *testing.T) {
-	configFilename = "invalid config.yaml"
+	envPath = "invalid config.env"
 	main()
 }
 
 func TestShouldExitIfConfigContainsInvalidMnemonic(t *testing.T) {
-	configFilename = "./testdata/invalid_mnemonic_config.yaml"
+	envPath = "./testdata/invalid_mnemonic_config.env"
 	main()
 }
 

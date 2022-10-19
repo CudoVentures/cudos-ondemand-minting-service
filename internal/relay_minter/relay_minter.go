@@ -58,24 +58,24 @@ func (rm *relayMinter) Start(ctx context.Context) {
 
 	for ctx.Err() == nil && retries < rm.config.MaxRetries {
 
-		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.Chain.GRPC)
+		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.ChainGRPC)
 		if err != nil {
-			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.Chain.GRPC, err))
+			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.ChainGRPC, err))
 			continue
 		}
 
 		defer grpcConn.Close()
 
-		node, err := rm.rpcConnector.MakeRPCClient(rm.config.Chain.RPC)
+		node, err := rm.rpcConnector.MakeRPCClient(rm.config.ChainRPC)
 		if err != nil {
-			retry(fmt.Errorf("connecting (%s) failed: %s", rm.config.Chain.RPC, err))
+			retry(fmt.Errorf("connecting (%s) failed: %s", rm.config.ChainRPC, err))
 			continue
 		}
 
 		defer node.Stop()
 
 		rm.txSender = relaytx.NewTxSender(txtypes.NewServiceClient(grpcConn), queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
-			rm.privKey, rm.config.Chain.ID, rm.config.PaymentDenom, gasPrice, gasAdjustment, relaytx.NewTxSigner(rm.encodingConfig, rm.privKey))
+			rm.privKey, rm.config.ChainID, rm.config.PaymentDenom, gasPrice, gasAdjustment, relaytx.NewTxSigner(rm.encodingConfig, rm.privKey))
 		rm.txQuerier = relaytx.NewTxQuerier(node)
 
 		err = rm.startRelaying(ctx)
