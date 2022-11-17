@@ -24,6 +24,7 @@ func NewConfig(envPath string) (Config, error) {
 		RetryInterval:   getEnvAsDuration("RETRY_INTERVAL", time.Second*30),
 		RelayInterval:   getEnvAsDuration("RELAY_INTERVAL", time.Second*5),
 		PaymentDenom:    getEnv("PAYMENT_DENOM", "acudos"),
+		Port:            getEnvAsInt("PORT", 3000),
 	}, nil
 }
 
@@ -66,4 +67,5 @@ type Config struct {
 	RetryInterval   time.Duration
 	RelayInterval   time.Duration
 	PaymentDenom    string
+	Port            int
 }
