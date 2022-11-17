@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	client "github.com/cosmos/cosmos-sdk/client"
@@ -34,6 +35,8 @@ func NewTxSender(txClient txClient, accInfoClient accountInfoClient, encodingCon
 }
 
 func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gasResult model.GasResult) (string, error) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 
 	txBytes, err := ts.buildTx(ctx, msgs, memo, gasResult)
 	if err != nil {
@@ -53,6 +56,8 @@ func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gas
 }
 
 func (ts *txSender) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 
 	txBytes, err := ts.buildTx(ctx, msgs, memo, model.GasResult{
 		FeeAmount: sdk.NewCoins(sdk.NewCoin(ts.paymentDenom, sdk.NewInt(0))),
@@ -166,6 +171,7 @@ type signer interface {
 }
 
 type txSender struct {
+	mu             sync.Mutex
 	txClient       txClient
 	accInfoClient  accountInfoClient
 	encodingConfig *params.EncodingConfig

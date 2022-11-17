@@ -88,6 +88,14 @@ func (rm *relayMinter) Start(ctx context.Context) {
 	}
 }
 
+func (rm *relayMinter) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {
+	return rm.txSender.EstimateGas(ctx, msgs, memo)
+}
+
+func (rm *relayMinter) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
+	return rm.nftDataClient.GetNFTData(ctx, uid)
+}
+
 func (rm *relayMinter) startRelaying(ctx context.Context) error {
 	ticker := time.NewTicker(rm.config.RelayInterval)
 

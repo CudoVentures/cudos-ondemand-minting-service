@@ -20,7 +20,7 @@ func NewTokenisedInfraClient(url string, marshaler marshaler) *tokenisedInfraCli
 }
 
 func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s?uid=%s", tic.url, getNFTDataUri, uid), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s?id=%s", tic.url, getNFTDataUri, uid), nil)
 	if err != nil {
 		return model.NFTData{}, err
 	}
@@ -100,6 +100,6 @@ type tokenisedInfraClient struct {
 
 const (
 	clientTimeout    = time.Second * 10
-	getNFTDataUri    = "/nft"
-	markMintedNFTUri = "/nft/minted/check-status"
+	getNFTDataUri    = "/api/v1/nft"
+	markMintedNFTUri = "/api/v1/nft/minted/check-status"
 )
