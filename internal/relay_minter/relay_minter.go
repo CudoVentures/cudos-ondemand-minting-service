@@ -125,7 +125,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		return err
 	}
 
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress))
+	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress.String()))
 	if err != nil {
 		return err
 	}
@@ -386,7 +386,7 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 		return fmt.Errorf("nft (%s) was not found", uid)
 	}
 
-	if nftData.Status != model.ApprovedNFTStatus {
+	if nftData.Status != model.QueuedNFTStatus {
 		return fmt.Errorf("nft (%s) has invalid status (%s)", uid, nftData.Status)
 	}
 

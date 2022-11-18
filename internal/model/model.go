@@ -9,12 +9,12 @@ type State struct {
 }
 
 type NFTData struct {
-	Price   sdk.Coin  `json:"price"`
+	Price   sdk.Coin  `json:"price_coin"`
 	Name    string    `json:"name"`
 	Uri     string    `json:"uri"`
-	Data    string    `json:"data"`
+	Data    string    `json:"nft_data"`
 	DenomID string    `json:"denom_id"`
-	Status  NFTStatus `json:"state"`
+	Status  NFTStatus `json:"status"`
 }
 
 type NFTStatus string
