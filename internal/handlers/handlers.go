@@ -33,7 +33,7 @@ func GetMintTxFee(cfg config.Config, walletAddress string, ge gasEstmator, ndp n
 			return
 		}
 
-		nftData.Price.Amount = sdk.NewInt(1)
+		nftData.Price.Amount = sdk.NewIntFromUint64(1000000000000000000)
 
 		msgMintNft := marketplacetypes.NewMsgMintNft(walletAddress, nftData.DenomID, recipient, nftData.Name, nftData.Uri, nftData.Data, uid, nftData.Price)
 		gasResult, err := ge.EstimateGas(r.Context(), []sdk.Msg{msgMintNft}, "")
