@@ -391,7 +391,7 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 	}
 
 	msgMintNft := marketplacetypes.NewMsgMintNft(rm.walletAddress.String(), nftData.DenomID,
-		recipient, nftData.Name, nftData.Uri, nftData.Data, uid, nftData.Price)
+		recipient, nftData.Name, nftData.Uri, nftData.Data, uid, sdk.NewCoin("acudos", nftData.Price))
 
 	gasResult, err := rm.txSender.EstimateGas(ctx, []sdk.Msg{msgMintNft}, "")
 	if err != nil {
@@ -406,9 +406,9 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 
 	amountWithoutGas := amount.Amount.Sub(gas)
 
-	if amountWithoutGas.LT(nftData.Price.Amount) {
+	if amountWithoutGas.LT(nftData.Price) {
 		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)",
-			amountWithoutGas.Uint64(), nftData.Price.Amount.Uint64())
+			amountWithoutGas.Uint64(), nftData.Price.Uint64())
 	}
 
 	txHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgMintNft}, "", gasResult)
