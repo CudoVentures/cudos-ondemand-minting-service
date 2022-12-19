@@ -73,7 +73,6 @@ func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, e
 	if err != nil {
 		return model.NFTData{}, err
 	}
-
 	nft := model.NFTData{}
 	if err := tic.marshaler.Unmarshal(body, &nft); err != nil {
 		return model.NFTData{}, err
@@ -100,6 +99,6 @@ type tokenisedInfraClient struct {
 
 const (
 	clientTimeout    = time.Second * 10
-	getNFTDataUri    = "/api/v1/nft"
-	markMintedNFTUri = "/api/v1/nft/minted/check-status"
+	getNFTDataUri    = "api/v1/nft"
+	markMintedNFTUri = "api/v1/nft/minted/check-status"
 )
