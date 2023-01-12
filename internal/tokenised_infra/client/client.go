@@ -30,7 +30,7 @@ func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (mo
 		return model.NFTData{}, err
 	}
 
-	if res.StatusCode == http.StatusNotFound {
+	if res.StatusCode != http.StatusOK {
 		return model.NFTData{}, nil
 	}
 
