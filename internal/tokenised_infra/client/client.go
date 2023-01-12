@@ -73,7 +73,6 @@ func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, e
 	if err != nil {
 		return model.NFTData{}, err
 	}
-
 	nft := model.NFTData{}
 	if err := tic.marshaler.Unmarshal(body, &nft); err != nil {
 		return model.NFTData{}, err
