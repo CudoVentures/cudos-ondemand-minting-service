@@ -9,7 +9,7 @@ type State struct {
 }
 
 type NFTData struct {
-	Price   sdk.Int  `json:"price"`
+	Price   sdk.Int   `json:"priceInAcudos"`
 	Name    string    `json:"name"`
 	Uri     string    `json:"uri"`
 	Data    string    `json:"data"`
