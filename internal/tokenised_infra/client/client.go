@@ -22,6 +22,7 @@ func NewTokenisedInfraClient(url string, marshaler marshaler) *tokenisedInfraCli
 }
 
 func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
+	log.Info().Msgf("making request to %s", fmt.Sprintf("%s%s/%s", tic.url, getNFTDataUri, uid))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s/%s", tic.url, getNFTDataUri, uid), nil)
 	if err != nil {
 		return model.NFTData{}, err
@@ -72,7 +73,7 @@ func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, e
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
-	log.Info().Msgf("recieved NFT Data %s", string(body))
+	log.Info().Msgf("received NFT Data %s", string(body))
 	if err != nil {
 		return model.NFTData{}, err
 	}
