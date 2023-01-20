@@ -31,12 +31,13 @@ func main() {
 }
 
 func runService(ctx context.Context) {
-
+	log.Info().Msg("starting on-demand-minting-service")
 	cfg, err := config.NewConfig(envPath)
 	if err != nil {
-		fmt.Printf("creating config failed: %s", err)
+		log.Fatal().Msgf("creating config failed: %s", err)
 		return
 	}
+	log.Info().Msgf("using config %s", cfg.String())
 
 	cudosapp.SetConfig()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
@@ -47,21 +48,30 @@ func runService(ctx context.Context) {
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {
-		fmt.Println("failed to create private key from wallet mnemonic")
+		log.Error().Msg("failed to create private key from wallet mnemonic")
 		return
 	}
 
-	rm := relayminter.NewRelayMinter(logger.NewLogger(zerolog.New(os.Stderr).With().Timestamp().Logger()),
-		&encodingConfig, cfg, state, infraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
+	rm := relayminter.NewRelayMinter(
+		logger.NewLogger(zerolog.New(log.Output(zerolog.ConsoleWriter{Out: os.Stderr})).With().Timestamp().Logger()),
+		&encodingConfig,
+		cfg,
+		state,
+		infraClient,
+		privKey,
+		grpc.GRPCConnector{},
+		rpc.RPCConnector{},
+		tx.NewTxCoder(&encodingConfig),
+	)
 
 	go rm.Start(ctx)
 
-	log.Info().Msg("Registering http handlers")
+	log.Info().Msg("registering http handlers")
 
 	r := mux.NewRouter()
 	r.HandleFunc("/simulate/mint", handlers.GetMintTxFee(cfg, sdk.AccAddress(privKey.PubKey().Address()).String(), rm, rm))
 
-	log.Info().Msg(fmt.Sprintf("Listening on port: %d", cfg.Port))
+	log.Info().Msg(fmt.Sprintf("listening on port: %d", cfg.Port))
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
@@ -71,13 +81,14 @@ func runService(ctx context.Context) {
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatal().Err(fmt.Errorf("error while listening: %s", err))
+			log.Fatal().Msgf("error while listening: %s", err)
 		}
 	}()
 
 	<-ctx.Done()
 
 	srv.Shutdown(context.Background())
+	log.Info().Msg("stopping on-demand-minting-service")
 }
 
 var envPath = ".env"

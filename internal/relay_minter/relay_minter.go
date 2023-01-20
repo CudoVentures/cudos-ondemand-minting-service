@@ -41,6 +41,8 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 }
 
 func (rm *relayMinter) Start(ctx context.Context) {
+	rm.logger.Info("starting relayer")
+
 	retries := 0
 
 	retry := func(err error) {
@@ -63,6 +65,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.ChainGRPC, err))
 			continue
 		}
+		rm.logger.Info(fmt.Sprintf("successfully creating GRPC connectionn using %s", rm.config.ChainGRPC))
 
 		defer grpcConn.Close()
 
@@ -71,13 +74,23 @@ func (rm *relayMinter) Start(ctx context.Context) {
 			retry(fmt.Errorf("connecting (%s) failed: %s", rm.config.ChainRPC, err))
 			continue
 		}
+		rm.logger.Info(fmt.Sprintf("successfully creating client %s", rm.config.ChainRPC))
 
 		defer node.Stop()
 
-		rm.txSender = relaytx.NewTxSender(txtypes.NewServiceClient(grpcConn), queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig), rm.encodingConfig,
-			rm.privKey, rm.config.ChainID, rm.config.PaymentDenom, gasPrice, gasAdjustment, relaytx.NewTxSigner(rm.encodingConfig, rm.privKey))
+		rm.txSender = relaytx.NewTxSender(
+			txtypes.NewServiceClient(grpcConn),
+			queryacc.NewAccountInfoClient(grpcConn, rm.encodingConfig),
+			rm.encodingConfig,
+			rm.privKey,
+			rm.config.ChainID,
+			rm.config.PaymentDenom,
+			gasPrice, gasAdjustment,
+			relaytx.NewTxSigner(rm.encodingConfig, rm.privKey),
+		)
 		rm.txQuerier = relaytx.NewTxQuerier(node)
 
+		rm.logger.Info("start relaying")
 		err = rm.startRelaying(ctx)
 
 		if err == contextDone {
@@ -86,6 +99,8 @@ func (rm *relayMinter) Start(ctx context.Context) {
 
 		retry(err)
 	}
+
+	rm.logger.Info("end relayer")
 }
 
 func (rm *relayMinter) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo string) (model.GasResult, error) {
@@ -116,24 +131,30 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 
 // Get bank transfers to our address with height > s.Height
 // Start iterating them
-// 		Check if given NFT UID is minted onchain, if true, then refund
-//      		Before refunding make sure you didn't refunded already by checking for refunds for this tx hash
+//
+//			Check if given NFT UID is minted onchain, if true, then refund
+//	     		Before refunding make sure you didn't refunded already by checking for refunds for this tx hash
+//
 // If mint fails for some reason, refund the user following the same refund checks as above
 func (rm *relayMinter) relay(ctx context.Context) error {
+	rm.logger.Info("single relaying")
 	s, err := rm.stateStorage.GetState()
 	if err != nil {
 		return err
 	}
 
+	rm.logger.Info(fmt.Sprintf("check events after %d of wallet %s", s.Height, rm.walletAddress.String()))
 	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress.String()))
 	if err != nil {
 		return err
 	}
 
 	if results == nil || len(results.Txs) == 0 {
+		rm.logger.Info("there is nothing to process")
 		return nil
 	}
 
+	rm.logger.Info(fmt.Sprintf("successfully got %d events", len(results.Txs)))
 	// TODO: Verify that results is really sorted in ascending order by height
 
 	for _, result := range results.Txs {
@@ -142,15 +163,17 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			rm.logger.Error(fmt.Errorf("getting received bank send info failed: %s", err))
 			continue
 		}
+		rm.logger.Info(fmt.Sprintf("processing uuid(%s) FromAddress(%s) Amount(%s)", sendInfo.Memo.UID, sendInfo.FromAddress, sendInfo.Amount.String()))
 
 		isMinted, err := rm.isMinted(ctx, sendInfo.Memo.UID)
 		if err != nil {
 			return err
 		}
+		rm.logger.Info(fmt.Sprintf("Minted NFT(%s): %t", sendInfo.Memo.UID, isMinted))
 
 		if isMinted {
 			if err := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); err != nil {
-				return fmt.Errorf("%s, failed to refund", err)
+				return fmt.Errorf("%s, failed to refund as it was already minted", err)
 			}
 
 			continue
@@ -160,12 +183,14 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		rm.logger.Info(fmt.Sprintf("NFT info: Price(%s), Name(%s), Uri(%s), Data(%s), DenomId(%s), Status(%s)", nftData.Price.String(), nftData.Name, nftData.Uri, nftData.Data, nftData.DenomID, nftData.Status))
 
 		if errMint := rm.mint(ctx, sendInfo.Memo.UID, sendInfo.FromAddress, nftData, sendInfo.Amount); errMint != nil {
 			errMint = fmt.Errorf("failed to mint: %s", errMint)
 			if errRefund := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
-				return fmt.Errorf("%s, failed to refund: %s", errMint, errRefund)
+				return fmt.Errorf("%s, failed to refund because minting is not successful: %s", errMint, errRefund)
 			}
+			rm.logger.Info(fmt.Sprintf("successfull refund for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			rm.logger.Error(errMint)
 		}
 	}
@@ -174,6 +199,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 
 	s.Height = results.Txs[len(results.Txs)-1].Height
 
+	rm.logger.Info(fmt.Sprintf("update state to %d", s.Height))
 	return rm.stateStorage.UpdateState(s)
 }
 
@@ -369,8 +395,7 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 	// We want to have some min refund amount to prevent DoS
 	if amountWithoutGas.LT(sdk.NewIntFromUint64(minRefundAmount)) {
-		rm.logger.Error(fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)",
-			amountWithoutGas.Int64(), minRefundAmount))
+		rm.logger.Error(fmt.Errorf("during refund received amount without gas (%d) is smaller than minimum refund amount (%d)", amountWithoutGas.Int64(), minRefundAmount))
 		return nil
 	}
 
@@ -400,21 +425,20 @@ func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData 
 
 	gas := sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice))
 	if gas.GT(amount.Amount) {
-		return fmt.Errorf("during mint received amount (%d) is smaller than the gas (%d)",
-			amount.Amount.Uint64(), gas.Uint64())
+		return fmt.Errorf("during mint received amount (%d) is smaller than the gas (%d)", amount.Amount.Uint64(), gas.Uint64())
 	}
 
 	amountWithoutGas := amount.Amount.Sub(gas)
 
 	if amountWithoutGas.LT(nftData.Price) {
-		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)",
-			amountWithoutGas.Uint64(), nftData.Price.Uint64())
+		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)", amountWithoutGas.Uint64(), nftData.Price.Uint64())
 	}
 
 	txHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgMintNft}, "", gasResult)
 	if err != nil {
 		return err
 	}
+	rm.logger.Info(fmt.Sprintf("success mint tx %s", txHash))
 
 	if err := rm.nftDataClient.MarkMintedNFT(ctx, txHash, uid); err != nil {
 		rm.logger.Error(fmt.Errorf("failed marking nft (%s) as minted: %s", uid, err))
@@ -487,6 +511,7 @@ type nftDataClient interface {
 
 type relayLogger interface {
 	Error(err error)
+	Info(msg string)
 }
 
 type grpcConnector interface {

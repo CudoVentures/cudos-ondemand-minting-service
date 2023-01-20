@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -68,4 +69,8 @@ type Config struct {
 	RelayInterval   time.Duration
 	PaymentDenom    string
 	Port            int
+}
+
+func (cfg *Config) String() string {
+	return fmt.Sprintf("WalletMnemonic(Hidden for security), ChainID(%s), ChainRPC(%s), ChainGRPC(%s), AuraPoolBackend(%s), StateFile(%s), MaxRetries(%d), RetryInterval(%d), RelayInterval(%d), PaymentDenom(%s), Port(%d)", cfg.ChainID, cfg.ChainRPC, cfg.ChainGRPC, cfg.AuraPoolBackend, cfg.StateFile, cfg.MaxRetries, cfg.RetryInterval, cfg.RelayInterval, cfg.PaymentDenom, cfg.Port)
 }
