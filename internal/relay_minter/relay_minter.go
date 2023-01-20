@@ -188,7 +188,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		if errMint := rm.mint(ctx, sendInfo.Memo.UID, sendInfo.FromAddress, nftData, sendInfo.Amount); errMint != nil {
 			errMint = fmt.Errorf("failed to mint: %s", errMint)
 			if errRefund := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
-				return fmt.Errorf("%s, failed to refund because minting is not successful: %s", errMint, errRefund)
+				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
 			}
 			rm.logger.Info(fmt.Sprintf("successfull refund for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			rm.logger.Error(errMint)
