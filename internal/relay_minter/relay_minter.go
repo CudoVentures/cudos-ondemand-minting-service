@@ -176,6 +176,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 				return fmt.Errorf("%s, failed to refund as it was already minted", err)
 			}
 
+			rm.logger.Info(fmt.Sprintf("successfull refund because it is already minted for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			continue
 		}
 
@@ -190,7 +191,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			if errRefund := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
 				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
 			}
-			rm.logger.Info(fmt.Sprintf("successfull refund for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
+			rm.logger.Info(fmt.Sprintf("successfull refund after failed mint for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			rm.logger.Error(errMint)
 		}
 	}
