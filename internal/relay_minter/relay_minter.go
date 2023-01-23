@@ -176,7 +176,6 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 				return fmt.Errorf("%s, failed to refund as it was already minted", err)
 			}
 
-			rm.logger.Info(fmt.Sprintf("successfull refund because it is already minted for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			continue
 		}
 
@@ -191,7 +190,6 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			if errRefund := rm.refund(ctx, result.Hash.String(), sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
 				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
 			}
-			rm.logger.Info(fmt.Sprintf("successfull refund after failed mint for NFT(%s) FromAddress(%s)", sendInfo.Memo.UID, sendInfo.FromAddress))
 			rm.logger.Error(errMint)
 		}
 	}
@@ -354,7 +352,7 @@ func (rm *relayMinter) isRefunded(ctx context.Context, receiveTxHash, refundRece
 			continue
 		}
 
-		if bytes.HexBytes(txWithMemo.GetMemo()).String() == receiveTxHash {
+		if string(bytes.HexBytes(txWithMemo.GetMemo())) == receiveTxHash {
 			rm.logger.Error(fmt.Errorf("already refunded %s", receiveTxHash))
 			return true, nil
 		}
@@ -402,7 +400,11 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 
-	_, err = rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, txHash, gasResult)
+	refundTxHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, txHash, gasResult)
+	if err != nil {
+		rm.logger.Info(fmt.Sprintf("successfull refund Transaction(%s) FromAddress(%s) with RefundTxHash(%s)", txHash, refundAddress, refundTxHash))
+	}
+
 	return err
 }
 
