@@ -83,20 +83,22 @@ func getNFTHandler() func(http.ResponseWriter, *http.Request) {
 
 var nfts = map[string]model.NFTData{
 	"nftuid1": {
-		Price:   sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
-		Name:    "test nft name",
-		Uri:     "test nft uri",
-		Data:    "test nft data",
-		DenomID: "testdenom",
-		Status:  model.ApprovedNFTStatus,
+		Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+		Name:            "test nft name",
+		Uri:             "test nft uri",
+		Data:            "test nft data",
+		DenomID:         "testdenom",
+		Status:          model.ApprovedNFTStatus,
+		PriceValidUntil: time.Now().UnixMilli() + 10000,
 	},
 	"nftuid2": {
-		Price:   sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
-		Name:    "test nft name",
-		Uri:     "test nft uri",
-		Data:    "test nft data",
-		DenomID: "testdenom",
-		Status:  model.RejectedNFTStatus,
+		Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+		Name:            "test nft name",
+		Uri:             "test nft uri",
+		Data:            "test nft data",
+		DenomID:         "testdenom",
+		Status:          model.RejectedNFTStatus,
+		PriceValidUntil: time.Now().UnixMilli() + 10000,
 	},
 }
 

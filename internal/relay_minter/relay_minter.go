@@ -410,6 +410,11 @@ func (rm *relayMinter) refund(ctx context.Context, txHash, refundReceiver string
 
 func (rm *relayMinter) mint(ctx context.Context, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
 	emptyNftData := model.NFTData{}
+
+	if nftData.PriceValidUntil < time.Now().UnixMilli() {
+		return fmt.Errorf("NftPrice valid time expired. Not minting it")
+	}
+
 	if nftData == emptyNftData {
 		return fmt.Errorf("nft (%s) was not found", uid)
 	}
