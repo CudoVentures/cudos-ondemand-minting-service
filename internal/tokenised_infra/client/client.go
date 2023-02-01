@@ -73,7 +73,7 @@ func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, e
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
-	log.Info().Msgf("received NFT Data %s", string(body))
+	// log.Info().Msgf("received NFT Data %s", string(body))
 	if err != nil {
 		return model.NFTData{}, err
 	}

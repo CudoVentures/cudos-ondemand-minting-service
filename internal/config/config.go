@@ -26,6 +26,7 @@ func NewConfig(envPath string) (Config, error) {
 		RelayInterval:   getEnvAsDuration("RELAY_INTERVAL", time.Second*5),
 		PaymentDenom:    getEnv("PAYMENT_DENOM", "acudos"),
 		Port:            getEnvAsInt("PORT", 3000),
+		PrettyLogging:   getEnvAsInt("PRETTY_LOGGING", 0),
 	}, nil
 }
 
@@ -69,8 +70,13 @@ type Config struct {
 	RelayInterval   time.Duration
 	PaymentDenom    string
 	Port            int
+	PrettyLogging   int
+}
+
+func (cfg *Config) HasPrettyLogging() bool {
+	return cfg.PrettyLogging == 1
 }
 
 func (cfg *Config) String() string {
-	return fmt.Sprintf("WalletMnemonic(Hidden for security), ChainID(%s), ChainRPC(%s), ChainGRPC(%s), AuraPoolBackend(%s), StateFile(%s), MaxRetries(%d), RetryInterval(%d), RelayInterval(%d), PaymentDenom(%s), Port(%d)", cfg.ChainID, cfg.ChainRPC, cfg.ChainGRPC, cfg.AuraPoolBackend, cfg.StateFile, cfg.MaxRetries, cfg.RetryInterval, cfg.RelayInterval, cfg.PaymentDenom, cfg.Port)
+	return fmt.Sprintf("Config { WalletMnemonic(Hidden for security), ChainID(%s), ChainRPC(%s), ChainGRPC(%s), AuraPoolBackend(%s), StateFile(%s), MaxRetries(%d), RetryInterval(%d), RelayInterval(%d), PaymentDenom(%s), Port(%d) }", cfg.ChainID, cfg.ChainRPC, cfg.ChainGRPC, cfg.AuraPoolBackend, cfg.StateFile, cfg.MaxRetries, cfg.RetryInterval, cfg.RelayInterval, cfg.PaymentDenom, cfg.Port)
 }

@@ -1,6 +1,9 @@
 package model
 
 import (
+	"fmt"
+	"time"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -16,6 +19,10 @@ type NFTData struct {
 	DenomID         string    `json:"denomId"`
 	Status          NFTStatus `json:"status"`
 	PriceValidUntil int64     `json:"priceAcudosValidUntil"`
+}
+
+func (t *NFTData) String() string {
+	return fmt.Sprintf("NFTData { Price(%s) Name(%s) Uri(%s) Data(%s) DenomID(%s) Status(%s) PriceValidUntil(%s) }", t.Price.String(), t.Name, t.Uri, t.Data, t.DenomID, t.Status, time.Unix(t.PriceValidUntil/1000, 0).String())
 }
 
 type NFTStatus string

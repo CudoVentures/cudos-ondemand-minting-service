@@ -31,13 +31,21 @@ func main() {
 }
 
 func runService(ctx context.Context) {
-	log.Info().Msg("starting on-demand-minting-service")
 	cfg, err := config.NewConfig(envPath)
 	if err != nil {
 		log.Fatal().Msgf("creating config failed: %s", err)
 		return
 	}
-	log.Info().Msgf("using config %s", cfg.String())
+
+	var rmLogger zerolog.Logger
+	if cfg.HasPrettyLogging() {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		rmLogger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
+	} else {
+		rmLogger = zerolog.New(os.Stderr)
+	}
+
+	log.Info().Msgf("starting on-demand-minting-service using config %s", cfg.String())
 
 	cudosapp.SetConfig()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
@@ -53,7 +61,8 @@ func runService(ctx context.Context) {
 	}
 
 	rm := relayminter.NewRelayMinter(
-		logger.NewLogger(zerolog.New(log.Output(zerolog.ConsoleWriter{Out: os.Stderr})).With().Timestamp().Logger()),
+		logger.NewLogger(rmLogger.With().Str("module", "relayer").Timestamp().Logger()),
+		// logger.NewLogger(zerolog.New(log.Output(zerolog.ConsoleWriter{Out: os.Stderr})).With().Timestamp().Logger()),
 		&encodingConfig,
 		cfg,
 		state,
@@ -71,7 +80,7 @@ func runService(ctx context.Context) {
 	r := mux.NewRouter()
 	r.HandleFunc("/simulate/mint", handlers.GetMintTxFee(cfg, sdk.AccAddress(privKey.PubKey().Address()).String(), rm, rm))
 
-	log.Info().Msg(fmt.Sprintf("listening on port: %d", cfg.Port))
+	log.Info().Msg(fmt.Sprintf("listening on port %d", cfg.Port))
 	srv := &http.Server{
 		Handler:      r,
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
