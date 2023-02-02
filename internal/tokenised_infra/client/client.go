@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -38,33 +37,6 @@ func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (mo
 	}
 
 	return tic.parseBody(res)
-}
-
-func (tic *tokenisedInfraClient) MarkMintedNFT(ctx context.Context, mintTxHash, uid string) error {
-	markNftData, err := tic.marshaler.Marshal(mintTx{
-		TxHash: mintTxHash,
-		Uid:    uid,
-	})
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s%s", tic.url, markMintedNFTUri), bytes.NewBuffer(markNftData))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-
-	res, err := tic.client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if res.Body != nil {
-		defer res.Body.Close()
-	}
-
-	return nil
 }
 
 func (tic *tokenisedInfraClient) parseBody(res *http.Response) (model.NFTData, error) {

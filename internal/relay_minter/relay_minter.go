@@ -229,10 +229,6 @@ func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, u
 	}
 
 	rm.logger.Infof("success mint tx %s", txHash)
-	if err := rm.nftDataClient.MarkMintedNFT(ctx, txHash, uid); err != nil {
-		rm.logger.Error(fmt.Errorf("failed marking nft (%s) as minted: %s", uid, err))
-	}
-
 	return nil
 }
 
@@ -656,7 +652,6 @@ type txQuerier interface {
 
 type nftDataClient interface {
 	GetNFTData(ctx context.Context, uid string) (model.NFTData, error)
-	MarkMintedNFT(ctx context.Context, txHash, uid string) error
 }
 
 type relayLogger interface {
