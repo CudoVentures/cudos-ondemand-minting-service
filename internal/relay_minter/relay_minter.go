@@ -10,6 +10,7 @@ import (
 
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	queryacc "github.com/CudoVentures/cudos-ondemand-minting-service/internal/query/account"
 	relaytx "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
@@ -46,7 +47,9 @@ func (rm *relayMinter) Start(ctx context.Context) {
 	retries := 0
 
 	retry := func(err error) {
-		rm.logger.Error(fmt.Errorf("relaying failed on retry %d of %d: %v", retries, rm.config.MaxRetries, err))
+		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", retries, rm.config.MaxRetries, err)
+		rm.logger.Error(errors.New(errorMessage))
+		email.SendEmail(&rm.config, errorMessage)
 
 		ticker := time.NewTicker(rm.config.RetryInterval)
 

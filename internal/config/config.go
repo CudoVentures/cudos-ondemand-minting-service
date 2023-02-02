@@ -27,6 +27,9 @@ func NewConfig(envPath string) (Config, error) {
 		PaymentDenom:    getEnv("PAYMENT_DENOM", "acudos"),
 		Port:            getEnvAsInt("PORT", 3000),
 		PrettyLogging:   getEnvAsInt("PRETTY_LOGGING", 0),
+		EmailFrom:       getEnv("EMAIL_FROM", ""),
+		ServiceEmail:    getEnv("SERVICE_EMAIL", ""),
+		SendgridApiKey:  getEnv("SENDGRID_API_KEY", ""),
 	}, nil
 }
 
@@ -71,12 +74,19 @@ type Config struct {
 	PaymentDenom    string
 	Port            int
 	PrettyLogging   int
+	EmailFrom       string
+	ServiceEmail    string
+	SendgridApiKey  string
 }
 
 func (cfg *Config) HasPrettyLogging() bool {
 	return cfg.PrettyLogging == 1
 }
 
+func (cfg *Config) HasValidEmailSettings() bool {
+	return cfg.SendgridApiKey != "" && cfg.EmailFrom != "" && cfg.ServiceEmail != ""
+}
+
 func (cfg *Config) String() string {
-	return fmt.Sprintf("Config { WalletMnemonic(Hidden for security), ChainID(%s), ChainRPC(%s), ChainGRPC(%s), AuraPoolBackend(%s), StateFile(%s), MaxRetries(%d), RetryInterval(%d), RelayInterval(%d), PaymentDenom(%s), Port(%d) }", cfg.ChainID, cfg.ChainRPC, cfg.ChainGRPC, cfg.AuraPoolBackend, cfg.StateFile, cfg.MaxRetries, cfg.RetryInterval, cfg.RelayInterval, cfg.PaymentDenom, cfg.Port)
+	return fmt.Sprintf("Config { WalletMnemonic(Hidden for security), ChainID(%s), ChainRPC(%s), ChainGRPC(%s), AuraPoolBackend(%s), StateFile(%s), MaxRetries(%d), RetryInterval(%d), RelayInterval(%d), PaymentDenom(%s), Port(%d) PrettyLogging(%d) SendgridApiKey(%s) EmailFrom(%s) ServiceEmail(%s) }", cfg.ChainID, cfg.ChainRPC, cfg.ChainGRPC, cfg.AuraPoolBackend, cfg.StateFile, cfg.MaxRetries, cfg.RetryInterval, cfg.RelayInterval, cfg.PaymentDenom, cfg.Port, cfg.PrettyLogging, "Hidden for security", cfg.EmailFrom, cfg.ServiceEmail)
 }
