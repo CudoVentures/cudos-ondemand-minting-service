@@ -27,7 +27,7 @@ func GetMintTxFee(cfg config.Config, walletAddress string, ge gasEstmator, ndp n
 			return
 		}
 
-		nftData, err := ndp.GetNFTData(r.Context(), uid)
+		nftData, err := ndp.GetNFTData(r.Context(), uid, recipient)
 		if err != nil {
 			badRequest(w, err)
 			return
@@ -74,7 +74,7 @@ type gasEstmator interface {
 }
 
 type nftDataProvider interface {
-	GetNFTData(ctx context.Context, uid string) (model.NFTData, error)
+	GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error)
 }
 
 type gasResultResponse struct {

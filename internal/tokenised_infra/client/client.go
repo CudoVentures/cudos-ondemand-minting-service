@@ -20,9 +20,9 @@ func NewTokenisedInfraClient(url string, marshaler marshaler) *tokenisedInfraCli
 	}
 }
 
-func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
-	log.Info().Msgf("making request to %s", fmt.Sprintf("%s%s/%s", tic.url, getNFTDataUri, uid))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s/%s", tic.url, getNFTDataUri, uid), nil)
+func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error) {
+	log.Info().Msgf("making request to %s", fmt.Sprintf("%s%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress), nil)
 	if err != nil {
 		return model.NFTData{}, err
 	}

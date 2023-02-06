@@ -169,7 +169,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		nftData, err := rm.nftDataClient.GetNFTData(ctx, sendInfo.Memo.UID)
+		nftData, err := rm.nftDataClient.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress)
 		if err != nil {
 			return err
 		}
@@ -195,14 +195,16 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
 	emptyNftData := model.NFTData{}
 
-	if nftData.PriceValidUntil < time.Now().UnixMilli() {
-		return fmt.Errorf("NftPrice valid time expired. Not minting it")
-	}
-
 	if nftData == emptyNftData {
 		return fmt.Errorf("nft (%s) was not found", uid)
 	}
 
+	// this check is in AuraPool, but it can stay here just in case
+	if nftData.PriceValidUntil < time.Now().UnixMilli() {
+		return fmt.Errorf("NftPrice valid time expired. Not minting it")
+	}
+
+	// this check is in AuraPool, but it can stay here just in case
 	if nftData.Status != model.QueuedNFTStatus {
 		return fmt.Errorf("nft (%s) has invalid status (%s)", uid, nftData.Status)
 	}
@@ -510,8 +512,8 @@ func (rm *relayMinter) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo str
 	return rm.txSender.EstimateGas(ctx, msgs, memo)
 }
 
-func (rm *relayMinter) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
-	return rm.nftDataClient.GetNFTData(ctx, uid)
+func (rm *relayMinter) GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error) {
+	return rm.nftDataClient.GetNFTData(ctx, uid, recipientCudosAddress)
 }
 
 func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, error) {
@@ -651,7 +653,7 @@ type txQuerier interface {
 }
 
 type nftDataClient interface {
-	GetNFTData(ctx context.Context, uid string) (model.NFTData, error)
+	GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error)
 }
 
 type relayLogger interface {
