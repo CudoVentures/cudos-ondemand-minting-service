@@ -74,7 +74,6 @@ type tokenisedInfraClient struct {
 }
 
 const (
-	clientTimeout    = time.Second * 10
-	getNFTDataUri    = "/api/v1/nft"
-	markMintedNFTUri = "/api/v1/nft/minted/check-status"
+	clientTimeout = time.Second * 10
+	getNFTDataUri = "/api/v1/nft/on-demand-minting-nft"
 )
