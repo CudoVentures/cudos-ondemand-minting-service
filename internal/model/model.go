@@ -12,6 +12,7 @@ type State struct {
 }
 
 type NFTData struct {
+	Id              string    `json:"id"`
 	Price           sdk.Int   `json:"priceInAcudos"`
 	Name            string    `json:"name"`
 	Uri             string    `json:"uri"`
@@ -22,7 +23,7 @@ type NFTData struct {
 }
 
 func (t *NFTData) String() string {
-	return fmt.Sprintf("NFTData { Price(%s) Name(%s) Uri(%s) Data(%s) DenomID(%s) Status(%s) PriceValidUntil(%s) }", t.Price.String(), t.Name, t.Uri, t.Data, t.DenomID, t.Status, time.Unix(t.PriceValidUntil/1000, 0).String())
+	return fmt.Sprintf("NFTData { Id(%s) Price(%s) Name(%s) Uri(%s) Data(%s) DenomID(%s) Status(%s) PriceValidUntil(%s) }", t.Id, t.Price.String(), t.Name, t.Uri, t.Data, t.DenomID, t.Status, time.Unix(t.PriceValidUntil/1000, 0).String())
 }
 
 type NFTStatus string

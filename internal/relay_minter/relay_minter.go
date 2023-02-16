@@ -147,25 +147,32 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		return results.Txs[i].Height < results.Txs[j].Height
 	})
 
-	for _, result := range results.Txs {
+	for i, result := range results.Txs {
 		incomingPaymentTxHash := result.Hash.String()
 		sendInfo, err := rm.getReceivedBankSendInfo(result)
 		if err != nil {
 			rm.logger.Warnf("getting received bank send info for tx(%s) failed: %s", incomingPaymentTxHash, err)
 			continue
 		}
-		rm.logger.Infof("processing incomingPaymentTxHash(%s) with payment(%s)", incomingPaymentTxHash, sendInfo.String())
+		rm.logger.Infof("%d: processing incomingPaymentTxHash(%s) at height(%d) with payment(%s)", i+1, incomingPaymentTxHash, result.Height, sendInfo.String())
 
-		isMintedNft, err := rm.isMintedNft(ctx, sendInfo.Memo.UID)
+		isMintingTransaction, err := rm.isMintingTransaction(ctx, sendInfo.Memo.RecipientAddress, incomingPaymentTxHash)
 		if err != nil {
 			return err
 		}
 
-		if isMintedNft {
-			if err := rm.refund(ctx, sendInfo.Memo.UID, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); err != nil {
-				return fmt.Errorf("%s, failed to refund as it was already minted", err)
-			}
+		if isMintingTransaction {
+			rm.logger.Infof("transaction(%s) has already been successfully processed and it results to a minted nft to a buyer (%s)", incomingPaymentTxHash, sendInfo.Memo.RecipientAddress)
+			continue
+		}
 
+		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.Memo.RecipientAddress)
+		if err != nil {
+			return err
+		}
+
+		if isRefunded {
+			rm.logger.Infof("transaction(%s) has already been refunded to buyer(%s)", incomingPaymentTxHash, sendInfo.FromAddress)
 			continue
 		}
 
@@ -175,10 +182,23 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		}
 		rm.logger.Infof("NFT Data(%s)", nftData.String())
 
-		if errMint := rm.mint(ctx, incomingPaymentTxHash, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, nftData, sendInfo.Amount); errMint != nil {
+		isMintedNft, err := rm.isMintedNft(ctx, nftData.Id)
+		if err != nil {
+			return err
+		}
+
+		if isMintedNft {
+			if err := rm.refund(ctx, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); err != nil {
+				return fmt.Errorf("%s, failed to refund as it was already minted", err)
+			}
+
+			continue
+		}
+
+		if errMint := rm.mint(ctx, incomingPaymentTxHash, nftData.Id, sendInfo.Memo.RecipientAddress, nftData, sendInfo.Amount); errMint != nil {
 			errMint = fmt.Errorf("failed to mint: %s", errMint)
-			rm.logger.Warnf("minting of NFT(%s) failed from address(%s) with tx incomingPaymentTxHash(%s) with error[%v]", sendInfo.Memo.UID, sendInfo.FromAddress, incomingPaymentTxHash, errMint)
-			if errRefund := rm.refund(ctx, sendInfo.Memo.UID, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
+			rm.logger.Warnf("minting of NFT(%s) failed from address(%s) with tx incomingPaymentTxHash(%s) with error[%v]", nftData.Id, sendInfo.FromAddress, incomingPaymentTxHash, errMint)
+			if errRefund := rm.refund(ctx, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
 				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
 			}
 		}
@@ -217,12 +237,12 @@ func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, u
 
 	gas := sdk.NewIntFromUint64(gasResult.GasLimit).Mul(sdk.NewIntFromUint64(gasPrice))
 	if gas.GT(amount.Amount) {
-		return fmt.Errorf("during mint received amount (%d) is smaller than the gas (%d)", amount.Amount.Uint64(), gas.Uint64())
+		return fmt.Errorf("during mint received amount (%s) is smaller than the gas (%s)", amount.Amount.String(), gas.String())
 	}
 
 	amountWithoutGas := amount.Amount.Sub(gas)
 	if amountWithoutGas.LT(nftData.Price) {
-		return fmt.Errorf("during mint received amount without gas (%d) is smaller than price (%d)", amountWithoutGas.Uint64(), nftData.Price.Uint64())
+		return fmt.Errorf("during mint received amount without gas (%s) is smaller than price (%s)", amountWithoutGas.String(), nftData.Price.String())
 	}
 
 	txHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgMintNft}, incomingPaymentTxHash, gasResult)
@@ -236,24 +256,16 @@ func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, u
 
 // Refund only if not refunded already by checking onchain
 // and the money that user sent are enough to cover the gas fees, otherwise skip
-func (rm *relayMinter) refund(ctx context.Context, uid, incomingPaymentTxHash, refundReceiver string, amount sdk.Coin) error {
-	isMintingTransaction, err := rm.isMintingTransaction(ctx, uid, incomingPaymentTxHash)
-	if err != nil {
-		return err
-	}
+func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refundReceiver string, amount sdk.Coin) error {
+	// refund is already checked
+	// isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, refundReceiver)
+	// if err != nil {
+	// 	return err
+	// }
 
-	if isMintingTransaction {
-		return nil
-	}
-
-	isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, refundReceiver)
-	if err != nil {
-		return err
-	}
-
-	if isRefunded {
-		return nil
-	}
+	// if isRefunded {
+	// 	return nil
+	// }
 
 	walletAddress, err := sdk.AccAddressFromBech32(rm.walletAddress.String())
 	if err != nil {
@@ -289,7 +301,7 @@ func (rm *relayMinter) refund(ctx context.Context, uid, incomingPaymentTxHash, r
 
 func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
-	results, err := rm.queryNftMintTransaction(ctx, uid, "minted")
+	results, err := rm.queryNftMintTransactionByUid(ctx, uid, "minted")
 	if err != nil {
 		return false, err
 	}
@@ -303,9 +315,9 @@ func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error
 	return false, nil
 }
 
-func (rm *relayMinter) isMintingTransaction(ctx context.Context, uid, incomingPaymentTxHash string) (bool, error) {
+func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, incomingPaymentTxHash string) (bool, error) {
 	rm.logger.Infof("checking whether %s is minting transaction", incomingPaymentTxHash)
-	results, err := rm.queryNftMintTransaction(ctx, uid, "minting transaction")
+	results, err := rm.queryNftMintTransactionByBuyer(ctx, buyerAddress, "minting transaction")
 	if err != nil {
 		return false, err
 	}
@@ -372,7 +384,7 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, re
 	return false, nil
 }
 
-func (rm *relayMinter) queryNftMintTransaction(ctx context.Context, uid, logInfo string) ([]*decodedTxWithMemo, error) {
+func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
 	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
@@ -407,6 +419,49 @@ func (rm *relayMinter) queryNftMintTransaction(ctx context.Context, uid, logInfo
 			}
 
 			if mintMsg.Uid == uid {
+				resultingArray = append(resultingArray, NewDecodedTxWithMemo(result.Hash.String(), tx))
+			}
+		}
+	}
+
+	return resultingArray, nil
+}
+
+func (rm *relayMinter) queryNftMintTransactionByBuyer(ctx context.Context, buyerAddress, logInfo string) ([]*decodedTxWithMemo, error) {
+	resultingArray := make([](*decodedTxWithMemo), 0)
+
+	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.buyer='%s'", buyerAddress))
+	if err != nil {
+		return resultingArray, err
+	}
+
+	if results != nil && len(results.Txs) > 0 {
+		for _, result := range results.Txs {
+			tx, err := rm.decodeTx(result)
+			if err != nil {
+				rm.logger.Warnf("during check if %s, decoding tx (%s) failed: %s", logInfo, result.Hash.String(), err)
+				continue
+			}
+
+			msgs := tx.GetMsgs()
+			if len(msgs) != 1 {
+				rm.logger.Warnf("during check if %s for tx(%s), expected one message but got %d", logInfo, result.Hash.String(), len(msgs))
+				continue
+			}
+
+			mintMsg, ok := msgs[0].(*marketplacetypes.MsgMintNft)
+			if !ok {
+				rm.logger.Warnf("during check if %s for tx(%s), message was not mint msg", logInfo, result.Hash.String())
+				continue
+			}
+
+			// TO DO: Why we are checking the creator?
+			if mintMsg.Creator != rm.walletAddress.String() {
+				rm.logger.Warnf("during check if %s for tx(%s), creator (%s) of the mint msg is not equal to wallet (%s)", logInfo, result.Hash.String(), mintMsg.Creator, rm.walletAddress.String())
+				continue
+			}
+
+			if mintMsg.Recipient == buyerAddress {
 				resultingArray = append(resultingArray, NewDecodedTxWithMemo(result.Hash.String(), tx))
 			}
 		}
