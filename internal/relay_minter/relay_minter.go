@@ -303,50 +303,6 @@ func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error
 	return false, nil
 }
 
-// func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
-// 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
-// 	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	if results != nil && len(results.Txs) > 0 {
-// 		for _, result := range results.Txs {
-// 			tx, err := rm.decodeTx(result)
-// 			if err != nil {
-// 				rm.logger.Warnf("during check if minted, decoding tx (%s) failed: %s", result.Hash.String(), err)
-// 				continue
-// 			}
-
-// 			msgs := tx.GetMsgs()
-// 			if len(msgs) != 1 {
-// 				rm.logger.Warnf("during check if minted for tx(%s), expected one message but got %d", result.Hash.String(), len(msgs))
-// 				continue
-// 			}
-
-// 			mintMsg, ok := msgs[0].(*marketplacetypes.MsgMintNft)
-// 			if !ok {
-// 				rm.logger.Warnf("during check if minted for tx(%s), message was not mint msg", result.Hash.String())
-// 				continue
-// 			}
-
-// 			// TO DO: Why we are checking the creator?
-// 			if mintMsg.Creator != rm.walletAddress.String() {
-// 				rm.logger.Warnf("during check if minted for tx(%s), creator (%s) of the mint msg is not equal to wallet (%s)", result.Hash.String(), mintMsg.Creator, rm.walletAddress.String())
-// 				continue
-// 			}
-
-// 			if mintMsg.Uid == uid {
-// 				rm.logger.Infof("Minted NFT(%s): true [%s]", uid, result.Hash.String())
-// 				return true, nil
-// 			}
-// 		}
-// 	}
-
-// 	rm.logger.Infof("Minted NFT(%s): false", uid)
-// 	return false, nil
-// }
-
 func (rm *relayMinter) isMintingTransaction(ctx context.Context, uid, incomingPaymentTxHash string) (bool, error) {
 	rm.logger.Infof("checking whether %s is minting transaction", incomingPaymentTxHash)
 	results, err := rm.queryNftMintTransaction(ctx, uid, "minting transaction")
@@ -365,55 +321,6 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, uid, incomingPa
 	rm.logger.Infof("%s is minting tx: false", incomingPaymentTxHash)
 	return false, nil
 }
-
-// func (rm *relayMinter) isMintingTransaction(ctx context.Context, uid, incomingPaymentTxHash string) (bool, error) {
-// 	rm.logger.Infof("checking whether %s is minting transaction", incomingPaymentTxHash)
-// 	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
-// 	if err != nil {
-// 		return false, err
-// 	}
-
-// 	if results != nil && len(results.Txs) > 0 {
-// 		for _, result := range results.Txs {
-// 			tx, err := rm.decodeTx(result)
-// 			if err != nil {
-// 				rm.logger.Warnf("during check if minting transaction, decoding tx (%s) failed: %s", result.Hash.String(), err)
-// 				continue
-// 			}
-
-// 			msgs := tx.GetMsgs()
-// 			if len(msgs) != 1 {
-// 				rm.logger.Warnf("during check if minting transaction for tx(%s), expected one message but got %d", result.Hash.String(), len(msgs))
-// 				continue
-// 			}
-
-// 			mintMsg, ok := msgs[0].(*marketplacetypes.MsgMintNft)
-// 			if !ok {
-// 				rm.logger.Warnf("during check if minting transaction for tx(%s), message was not mint msg", result.Hash.String())
-// 				continue
-// 			}
-
-// 			// TO DO: Why we are checking the creator?
-// 			if mintMsg.Creator != rm.walletAddress.String() {
-// 				rm.logger.Warnf("during check if minting transaction for tx(%s), creator (%s) of the mint msg is not equal to wallet (%s)", result.Hash.String(), mintMsg.Creator, rm.walletAddress.String())
-// 				continue
-// 			}
-
-// 			if mintMsg.Uid != uid {
-// 				rm.logger.Warnf("during check if minting transaction for tx(%s), msg.uid (%s) != nft uid(%s)", result.Hash.String(), mintMsg.Uid, uid)
-// 				continue
-// 			}
-
-// 			if tx.GetMemo() == incomingPaymentTxHash {
-// 				rm.logger.Infof("%s is minting tx: true [%s]", incomingPaymentTxHash, result.Hash.String())
-// 				return true, nil
-// 			}
-// 		}
-// 	}
-
-// 	rm.logger.Infof("%s is minting tx: false", incomingPaymentTxHash)
-// 	return false, nil
-// }
 
 func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, refundReceiver string) (bool, error) {
 	rm.logger.Infof("checking whether %s is refunded", incomingPaymentTxHash)
