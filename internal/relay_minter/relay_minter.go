@@ -176,7 +176,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		nftData, err := rm.nftDataClient.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress)
+		nftData, err := rm.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount)
 		if err != nil {
 			return err
 		}
@@ -474,8 +474,8 @@ func (rm *relayMinter) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo str
 	return rm.txSender.EstimateGas(ctx, msgs, memo)
 }
 
-func (rm *relayMinter) GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error) {
-	return rm.nftDataClient.GetNFTData(ctx, uid, recipientCudosAddress)
+func (rm *relayMinter) GetNFTData(ctx context.Context, uid, recipientCudosAddress string, paidAmount sdk.Coin) (model.NFTData, error) {
+	return rm.nftDataClient.GetNFTData(ctx, uid, recipientCudosAddress, paidAmount)
 }
 
 func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, error) {
@@ -615,7 +615,7 @@ type txQuerier interface {
 }
 
 type nftDataClient interface {
-	GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error)
+	GetNFTData(ctx context.Context, uid, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error)
 }
 
 type relayLogger interface {

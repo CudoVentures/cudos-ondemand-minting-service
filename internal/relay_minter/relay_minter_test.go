@@ -33,7 +33,7 @@ func TestRelay(t *testing.T) {
 	mockStatesStorage := newMockState()
 	mockTokenisedInfraClient := newTokenisedInfraClient(map[string]model.NFTData{
 		"nftuid#1": {
-			Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
@@ -42,7 +42,7 @@ func TestRelay(t *testing.T) {
 			PriceValidUntil: time.Now().UnixMilli() + 10000,
 		},
 		"nftuid#2": {
-			Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
@@ -51,7 +51,7 @@ func TestRelay(t *testing.T) {
 			PriceValidUntil: time.Now().UnixMilli() + 10000,
 		},
 		"nftuid#3": {
-			Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
@@ -166,7 +166,7 @@ func TestShouldFailMintIfReceivedAmountIsSmallerThanTheGasFails(t *testing.T) {
 
 	nftData := model.NFTData{
 		Status: model.ApprovedNFTStatus,
-		Price:  sdk.NewCoin("acudos", sdk.NewIntFromUint64(10)),
+		Price:  sdk.NewIntFromUint64(10),
 	}
 	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",
 		nftData, sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))
@@ -189,7 +189,7 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 
 	nftData := model.NFTData{
 		Status: model.ApprovedNFTStatus,
-		Price:  sdk.NewCoin("acudos", sdk.NewIntFromUint64(10)),
+		Price:  sdk.NewIntFromUint64(10),
 	}
 
 	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/rs/zerolog/log"
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
@@ -20,9 +21,9 @@ func NewTokenisedInfraClient(url string, marshaler marshaler) *tokenisedInfraCli
 	}
 }
 
-func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid, recipientCudosAddress string) (model.NFTData, error) {
-	log.Info().Msgf("making request to %s", fmt.Sprintf("%s%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress), nil)
+func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, uid, recipientCudosAddress string, paidAmount sdk.Coin) (model.NFTData, error) {
+	log.Info().Msgf("making request to %s", fmt.Sprintf("%s%s/%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress, paidAmount.Amount))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s%s/%s/%s/%s", tic.url, getNFTDataUri, uid, recipientCudosAddress, paidAmount.Amount), nil)
 	if err != nil {
 		return model.NFTData{}, err
 	}
