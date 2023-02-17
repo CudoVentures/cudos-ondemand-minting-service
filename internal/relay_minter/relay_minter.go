@@ -176,7 +176,9 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		nftData, err := rm.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount)
+		onCudos, _ := sdk.NewIntFromString("1000000000000000000")
+
+		nftData, err := rm.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount.Sub(sdk.NewCoin("acudos", onCudos)))
 		if err != nil {
 			return err
 		}
