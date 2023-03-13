@@ -29,6 +29,11 @@ func TestShouldExitIfConfigContainsInvalidMnemonic(t *testing.T) {
 	main()
 }
 
+func TestPrettyLogging(t *testing.T) {
+	envPath = "./testdata/pretty_logging.env"
+	main()
+}
+
 func newKillServer(addr string, cancel context.CancelFunc) *killServer {
 	return &killServer{
 		server: http.Server{

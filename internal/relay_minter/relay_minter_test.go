@@ -3,11 +3,13 @@ package relayminter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	cudosapp "github.com/CudoVentures/cudos-node/app"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	encodingconfig "github.com/CudoVentures/cudos-ondemand-minting-service/internal/encoding_config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/grpc"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/key"
@@ -15,6 +17,7 @@ import (
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/rpc"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
@@ -33,31 +36,34 @@ func TestRelay(t *testing.T) {
 	mockStatesStorage := newMockState()
 	mockTokenisedInfraClient := newTokenisedInfraClient(map[string]model.NFTData{
 		"nftuid#1": {
+			Id:              "nftuid#1",
 			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
 			DenomID:         "testdenom",
-			Status:          model.ApprovedNFTStatus,
-			PriceValidUntil: time.Now().UnixMilli() + 10000,
+			Status:          model.QueuedNFTStatus,
+			PriceValidUntil: tomorrow,
 		},
 		"nftuid#2": {
+			Id:              "nftuid#2",
 			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
 			DenomID:         "testdenom",
 			Status:          model.RejectedNFTStatus,
-			PriceValidUntil: time.Now().UnixMilli() + 10000,
+			PriceValidUntil: tomorrow,
 		},
 		"nftuid#3": {
+			Id:              "nftuid#3",
 			Price:           sdk.NewIntFromUint64(8000000000000000000),
 			Name:            "test nft name",
 			Uri:             "test nft uri",
 			Data:            "test nft data",
 			DenomID:         "testdenom",
 			Status:          model.ApprovedNFTStatus,
-			PriceValidUntil: time.Now().UnixMilli() + 10000,
+			PriceValidUntil: tomorrow,
 		},
 	},
 		map[string]error{
@@ -69,28 +75,32 @@ func TestRelay(t *testing.T) {
 	mockLogger := newMockLogger()
 
 	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, mockStatesStorage,
-		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
+		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 
 	testCases := buildTestCases(t, &encodingConfig, relayMinter.walletAddress)
 
-	for i := 0; i < len(testCases); i++ {
+	for _, testCase := range testCases {
+		// if testCase.name != "ShouldFailRelayIfAlreadyMintedAndRefundFails" {
+		// 	continue
+		// }
+		t.Run(testCase.name, func(t *testing.T) {
+			relayMinter.txQuerier = newMockTxQuerier(testCase.receivedBankSendTxs, testCase.mintTxs,
+				testCase.sentBankSendTxs, testCase.failMintTxsQuery)
+			mts := newMockTxSender(testCase.failAllSendTx)
+			relayMinter.txSender = mts
 
-		relayMinter.txQuerier = newMockTxQuerier(testCases[i].receivedBankSendTxs, testCases[i].mintTxs,
-			testCases[i].sentBankSendTxs, testCases[i].failMintTxsQuery)
-		mts := newMockTxSender(testCases[i].failAllSendTx)
-		relayMinter.txSender = mts
+			mockLogger = newMockLogger()
 
-		mockLogger = newMockLogger()
+			relayMinter.logger = mockLogger
 
-		relayMinter.logger = mockLogger
+			err := relayMinter.relay(context.Background())
 
-		err := relayMinter.relay(context.Background())
+			require.Equal(t, testCase.expectedError, err, testCase.name)
+			require.Contains(t, mockLogger.output, testCase.expectedLogOutput, testCase.name)
 
-		require.Equal(t, testCases[i].expectedError, err, testCases[i].name)
-		require.Equal(t, testCases[i].expectedLogOutput, mockLogger.output, testCases[i].name)
-
-		require.Equal(t, testCases[i].expectedOutputMemos, mts.outputMemos, testCases[i].name)
-		require.Equal(t, testCases[i].expectedOutputMsgs, mts.outputMsgs, testCases[i].name)
+			require.Equal(t, testCase.expectedOutputMemos, mts.outputMemos, testCase.name)
+			require.Equal(t, testCase.expectedOutputMsgs, mts.outputMsgs, testCase.name)
+		})
 	}
 }
 
@@ -106,7 +116,7 @@ func TestShouldRetryIfGRPCConnectionFails(t *testing.T) {
 		MaxRetries:    10,
 	}
 	grpcConnector := mockGRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -126,7 +136,7 @@ func TestShouldRetryIfRPCConnectionFails(t *testing.T) {
 		MaxRetries:    10,
 	}
 	rpcConnector := mockRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -140,15 +150,15 @@ func TestShouldFailMintIfEstimateGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 
 	gasEstimateFail := errors.New("failed to estimate gas")
 	mcts := mockCallsTxSender{}
-	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{}, gasEstimateFail)
+	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 0}, gasEstimateFail)
 	relayMinter.txSender = &mcts
 
-	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",
-		model.NFTData{Status: model.ApprovedNFTStatus}, sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))
+	err = relayMinter.mint(context.Background(), "txHash", "uid", refundReceiver,
+		model.NFTData{Status: model.QueuedNFTStatus, PriceValidUntil: tomorrow, Price: sdk.OneInt()}, sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))
 	require.Equal(t, gasEstimateFail, err)
 }
 
@@ -158,17 +168,18 @@ func TestShouldFailMintIfReceivedAmountIsSmallerThanTheGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 
 	mcts := mockCallsTxSender{}
 	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
 	relayMinter.txSender = &mcts
 
 	nftData := model.NFTData{
-		Status: model.ApprovedNFTStatus,
-		Price:  sdk.NewIntFromUint64(10),
+		Status:          model.QueuedNFTStatus,
+		Price:           sdk.NewIntFromUint64(10),
+		PriceValidUntil: tomorrow,
 	}
-	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",
+	err = relayMinter.mint(context.Background(), "txHash", "uid", refundReceiver,
 		nftData, sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))
 	require.Equal(t, errors.New("during mint received amount (100) is smaller than the gas (5000000000000)"), err)
 }
@@ -179,7 +190,7 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 
 	sendTxFail := errors.New("failed to send tx")
 	mcts := mockCallsTxSender{}
@@ -188,11 +199,12 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 	relayMinter.txSender = &mcts
 
 	nftData := model.NFTData{
-		Status: model.ApprovedNFTStatus,
-		Price:  sdk.NewIntFromUint64(10),
+		Status:          model.QueuedNFTStatus,
+		Price:           sdk.NewIntFromUint64(10),
+		PriceValidUntil: tomorrow,
 	}
 
-	err = relayMinter.mint(context.Background(), "uid", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg",
+	err = relayMinter.mint(context.Background(), "txHash", "uid", refundReceiver,
 		nftData, sdk.NewCoin("acudos", sdk.NewIntFromUint64(10000000000000000)))
 	require.Equal(t, sendTxFail, err)
 }
@@ -203,7 +215,7 @@ func TestShouldFailRefundIfParsingWalletAddressFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 	relayMinter.walletAddress = sdk.AccAddress{}
 
@@ -218,7 +230,7 @@ func TestShouldFailRefundIfParsingRefundReceiverAddressFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 
 	err = relayMinter.refund(context.Background(), "txHash", "refundReceiver", sdk.NewCoin("acudos", sdk.NewInt(0)))
@@ -232,7 +244,7 @@ func TestShouldFailRefundIfEstimateGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 
 	gasEstimateFail := errors.New("failed to estimate gas")
@@ -240,7 +252,7 @@ func TestShouldFailRefundIfEstimateGasFails(t *testing.T) {
 	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{}, gasEstimateFail)
 	relayMinter.txSender = &mcts
 
-	err = relayMinter.refund(context.Background(), "txHash", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	err = relayMinter.refund(context.Background(), "txHash", refundReceiver, sdk.NewCoin("acudos", sdk.NewInt(0)))
 	require.Equal(t, gasEstimateFail, err)
 }
 
@@ -250,13 +262,26 @@ func TestShouldFailRefundIfIsRefundFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, newMockState(), nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
-	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	txQuerier.On("Query", mock.Anything, fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", relayMinter.walletAddress.String(), relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	txQuerier.On("Query", mock.Anything, fmt.Sprintf("marketplace_mint_nft.buyer='%s'", relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, nil)
+	txQuerier.On("Query", mock.Anything, fmt.Sprintf("tx.height>0 AND transfer.recipient='%s'", relayMinter.walletAddress.String())).Return(buildTestResultTxSearch(t, [][]sdk.Msg{
+		{
+			banktypes.NewMsgSend(relayMinter.walletAddress, relayMinter.walletAddress, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
+		},
+	}, []string{
+		"{\"uuid\":\"nftuid#1\"}",
+	}, &encodingConfig, ""), nil)
 	relayMinter.txQuerier = &txQuerier
 
-	err = relayMinter.refund(context.Background(), "txHash", "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg", sdk.NewCoin("acudos", sdk.NewInt(0)))
+	mcts := mockCallsTxSender{}
+	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
+	relayMinter.txSender = &mcts
+
+	err = relayMinter.relay(context.Background())
 	require.Equal(t, failedQuery, err)
 }
 
@@ -266,14 +291,14 @@ func TestShouldFailIsMintedIfQueryFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
 	relayMinter.txQuerier = &txQuerier
 
-	isMinted, err := relayMinter.isMinted(context.Background(), "testuid")
+	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid")
 	require.Equal(t, false, isMinted)
 	require.Equal(t, failedQuery, err)
 }
@@ -284,7 +309,7 @@ func TestIsMintedShouldLogErrorIfDecodingTxFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 
 	txQuerier := mockCallsTxQuerier{}
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{
@@ -298,10 +323,10 @@ func TestIsMintedShouldLogErrorIfDecodingTxFails(t *testing.T) {
 	mctc.On("Decode", mock.Anything, mock.Anything).Return(&txWithoutMemo{}, nil)
 	relayMinter.txCoder = &mctc
 
-	isMinted, err := relayMinter.isMinted(context.Background(), "testuid")
+	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid")
 	require.Equal(t, false, isMinted)
 	require.NoError(t, err)
-	require.Equal(t, "during check if minted, decoding tx () failed: invalid transaction () type", mockLogger.output)
+	require.Contains(t, mockLogger.output, "during check if minted, decoding tx () failed: invalid transaction () type")
 }
 
 func TestShouldRetryRelayingIfRelayFails(t *testing.T) {
@@ -325,7 +350,7 @@ func TestShouldRetryRelayingIfRelayFails(t *testing.T) {
 	mcss := mockCallsStateStorage{}
 	mcss.On("GetState").Return(model.State{}, failedGettingState)
 
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, &mcss, nil, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, &mcss, nil, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -340,11 +365,15 @@ func TestShouldFailRelayIfQueryFails(t *testing.T) {
 
 	mockStatesStorage := newMockState()
 
-	relayMinter := NewRelayMinter(nil, nil, config.Config{}, mockStatesStorage, nil, privKey, nil, nil, nil)
+	relayMinter := NewRelayMinter(newMockLogger(), nil, config.Config{}, mockStatesStorage, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
 	relayMinter.txQuerier = &txQuerier
+
+	mcts := mockCallsTxSender{}
+	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
+	relayMinter.txSender = &mcts
 
 	err = relayMinter.relay(context.Background())
 	require.Equal(t, failedQuery, err)
@@ -426,3 +455,6 @@ type mockRPCConnector struct {
 }
 
 const walletMnemonic = "rebel wet poet torch carpet gaze axis ribbon approve depend inflict menu"
+const refundReceiver = "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg"
+
+var tomorrow = time.Now().Add(time.Hour * 24).UnixMilli()

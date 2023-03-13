@@ -10,7 +10,6 @@ import (
 
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
-	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	queryacc "github.com/CudoVentures/cudos-ondemand-minting-service/internal/query/account"
 	relaytx "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
@@ -19,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/tendermint/tendermint/libs/bytes"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -26,7 +26,7 @@ import (
 )
 
 func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage,
-	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder) *relayMinter {
+	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder, emailService emailService) *relayMinter {
 	return &relayMinter{
 		encodingConfig: encodingConfig,
 		config:         cfg,
@@ -38,18 +38,19 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		grpcConnector:  grpcConnector,
 		rpcConnector:   rpcConnector,
 		txCoder:        txCoder,
+		emailService:   emailService,
 	}
 }
 
 func (rm *relayMinter) Start(ctx context.Context) {
-	rm.logger.Info("start relayer")
+	rm.logger.Info("starting relayer")
 
 	retries := 0
 
 	retry := func(err error) {
 		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", retries, rm.config.MaxRetries, err)
 		rm.logger.Error(errors.New(errorMessage))
-		email.SendEmail(&rm.config, errorMessage)
+		rm.emailService.SendEmail(errorMessage)
 
 		ticker := time.NewTicker(rm.config.RetryInterval)
 
@@ -98,7 +99,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		retry(err)
 	}
 
-	rm.logger.Info("end relayer")
+	rm.logger.Info("stopping relayer")
 }
 
 func (rm *relayMinter) startRelaying(ctx context.Context) error {
@@ -184,7 +185,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		}
 		rm.logger.Infof("NFT Data(%s)", nftData.String())
 
-		isMintedNft, err := rm.isMintedNft(ctx, nftData.Id)
+		isMintedNft, err := rm.isMintedNft(ctx, sendInfo.Memo.UID)
 		if err != nil {
 			return err
 		}
@@ -197,11 +198,11 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		if errMint := rm.mint(ctx, incomingPaymentTxHash, nftData.Id, sendInfo.Memo.RecipientAddress, nftData, sendInfo.Amount); errMint != nil {
+		if errMint := rm.mint(ctx, incomingPaymentTxHash, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, nftData, sendInfo.Amount); errMint != nil {
 			errMint = fmt.Errorf("failed to mint: %s", errMint)
-			rm.logger.Warnf("minting of NFT(%s) failed from address(%s) with tx incomingPaymentTxHash(%s) with error[%v]", nftData.Id, sendInfo.FromAddress, incomingPaymentTxHash, errMint)
+			rm.logger.Warnf("minting of NFT(%s) failed from address(%s) with tx incomingPaymentTxHash(%s) with error[%v]", sendInfo.Memo.UID, sendInfo.FromAddress, incomingPaymentTxHash, errMint)
 			if errRefund := rm.refund(ctx, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
-				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
+				return fmt.Errorf("%s, failed to refund after unsuccessful minting: %s", errMint, errRefund)
 			}
 		}
 	}
@@ -295,7 +296,7 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 	refundTxHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, incomingPaymentTxHash, gasResult)
 	if err == nil {
-		rm.logger.Info(fmt.Sprintf("successfull refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
+		rm.logger.Info(fmt.Sprintf("successful refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
 	}
 
 	return err
@@ -303,6 +304,11 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 
 func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
+
+	if uid == "" {
+		return false, nil
+	}
+
 	results, err := rm.queryNftMintTransactionByUid(ctx, uid, "minted")
 	if err != nil {
 		return false, err
@@ -326,7 +332,7 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, i
 
 	for _, result := range results {
 		tx := result.TxWithMemo
-		if tx.GetMemo() == incomingPaymentTxHash {
+		if bytes.HexBytes(tx.GetMemo()).String() == incomingPaymentTxHash {
 			rm.logger.Infof("%s is minting tx: true [%s]", incomingPaymentTxHash, result.Hash)
 			return true, nil
 		}
@@ -375,7 +381,7 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, re
 				continue
 			}
 
-			if txWithMemo.GetMemo() == incomingPaymentTxHash {
+			if bytes.HexBytes(txWithMemo.GetMemo()).String() == incomingPaymentTxHash {
 				rm.logger.Infof("%s refunded: true [%s]", incomingPaymentTxHash, result.Hash.String())
 				return true, nil
 			}
@@ -571,6 +577,7 @@ type relayMinter struct {
 	grpcConnector  grpcConnector
 	rpcConnector   rpcConnector
 	txCoder        txCoder
+	emailService   emailService
 }
 
 type mintMemo struct {
@@ -634,6 +641,10 @@ type grpcConnector interface {
 
 type rpcConnector interface {
 	MakeRPCClient(url string) (*rpchttp.HTTP, error)
+}
+
+type emailService interface {
+	SendEmail(content string)
 }
 
 type decodedTxWithMemo struct {

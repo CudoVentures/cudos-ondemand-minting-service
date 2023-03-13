@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -30,33 +31,31 @@ func TestShouldFailGetNFTDataWithNotRunningService(t *testing.T) {
 func TestShouldFailGetNFTDataIfInvalidJSONResponse(t *testing.T) {
 	listener, err := net.Listen("tcp", ":1314")
 	require.NoError(t, err)
+	defer listener.Close()
 
 	ws := newWebServer(listener)
 	go ws.Start()
+	defer ws.server.Shutdown(context.Background())
 
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
 	_, err = client.GetNFTData(context.Background(), "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "invalid character"))
-
-	ws.server.Shutdown(context.Background())
-	listener.Close()
 }
 
 func TestGetNFTDataShouldReturnEmptyDataWithNoErrWhenNotUIDNotFound(t *testing.T) {
 	listener, err := net.Listen("tcp", ":1314")
 	require.NoError(t, err)
+	defer listener.Close()
 
 	ws := newWebServer(listener)
 	go ws.Start()
+	defer ws.server.Shutdown(context.Background())
 
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
 	data, err := client.GetNFTData(context.Background(), "notfounduid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.NoError(t, err)
 	require.Equal(t, model.NFTData{}, data)
-
-	ws.server.Shutdown(context.Background())
-	listener.Close()
 }
 
 func TestShouldFailParseBodyWithBodyError(t *testing.T) {
@@ -98,6 +97,18 @@ func TestShouldFailParseBodyWithBodyError(t *testing.T) {
 // type mockMarshaler struct {
 // }
 
+func TestShouldParseBody(t *testing.T) {
+	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
+	bz, err := client.marshaler.Marshal(&model.NFTData{Id: "1"})
+	require.NoError(t, err)
+
+	nftData, err := client.parseBody(&http.Response{
+		Body: io.NopCloser(strings.NewReader(string(bz))),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, model.NFTData{Id: "1", Price: sdk.ZeroInt()}, nftData)
+}
+
 type webServer struct {
 	server   http.Server
 	listener net.Listener
@@ -116,8 +127,7 @@ func (ws *webServer) Start() {
 }
 
 func (ws *webServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	uid := r.URL.Query().Get("uid")
-	if uid == "testuid" {
+	if strings.Contains(r.URL.Path, "testuid") {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("test"))
 		return

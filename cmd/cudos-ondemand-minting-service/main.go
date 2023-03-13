@@ -9,6 +9,7 @@ import (
 
 	cudosapp "github.com/CudoVentures/cudos-node/app"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	encodingconfig "github.com/CudoVentures/cudos-ondemand-minting-service/internal/encoding_config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/grpc"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/handlers"
@@ -71,6 +72,7 @@ func runService(ctx context.Context) {
 		grpc.GRPCConnector{},
 		rpc.RPCConnector{},
 		tx.NewTxCoder(&encodingConfig),
+		email.NewSendgridEmailService(cfg),
 	)
 
 	go rm.Start(ctx)
