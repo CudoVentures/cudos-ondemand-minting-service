@@ -30,6 +30,7 @@ func NewConfig(envPath string) (Config, error) {
 		EmailFrom:       getEnv("EMAIL_FROM", ""),
 		ServiceEmail:    getEnv("SERVICE_EMAIL", ""),
 		SendgridApiKey:  getEnv("SENDGRID_API_KEY", ""),
+		AuraPoolApiKey:  getEnv("AURA_POOL_API_KEY", ""),
 	}, nil
 }
 
@@ -77,6 +78,7 @@ type Config struct {
 	EmailFrom       string
 	ServiceEmail    string
 	SendgridApiKey  string
+	AuraPoolApiKey  string
 }
 
 func (cfg *Config) HasPrettyLogging() bool {
