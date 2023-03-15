@@ -38,16 +38,15 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		grpcConnector:  grpcConnector,
 		rpcConnector:   rpcConnector,
 		txCoder:        txCoder,
+		retries:        0,
 	}
 }
 
 func (rm *relayMinter) Start(ctx context.Context) {
 	rm.logger.Info("start relayer")
 
-	retries := 0
-
 	retry := func(err error) {
-		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", retries, rm.config.MaxRetries, err)
+		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", rm.retries, rm.config.MaxRetries, err)
 		rm.logger.Error(errors.New(errorMessage))
 		email.SendEmail(&rm.config, errorMessage)
 
@@ -58,10 +57,10 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		case <-ctx.Done():
 		}
 
-		retries += 1
+		rm.retries += 1
 	}
 
-	for ctx.Err() == nil && retries < rm.config.MaxRetries {
+	for ctx.Err() == nil && rm.retries < rm.config.MaxRetries {
 		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.ChainGRPC)
 		if err != nil {
 			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.ChainGRPC, err))
@@ -111,6 +110,8 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 			if err := rm.relay(ctx); err != nil {
 				return err
 			}
+			rm.logger.Info("successfull relay. resetting retries")
+			rm.retries = 0
 			ticker = time.NewTicker(rm.config.RelayInterval)
 		case <-ctx.Done():
 			return contextDone
@@ -572,6 +573,7 @@ type relayMinter struct {
 	grpcConnector  grpcConnector
 	rpcConnector   rpcConnector
 	txCoder        txCoder
+	retries        int
 }
 
 type mintMemo struct {
