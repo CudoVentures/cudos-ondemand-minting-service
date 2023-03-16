@@ -14,6 +14,7 @@ var (
 	lastSentEmailTimestamp = int64(0)
 )
 
+// Sending an email to "ServiceEmail" in cfg. The emails are send at most one in 30 minutes.
 func SendEmail(cfg *config.Config, content string) {
 	if !cfg.HasValidEmailSettings() {
 		log.Info().Msg("Emails are not configured")
