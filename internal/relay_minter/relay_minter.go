@@ -187,7 +187,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.Memo.RecipientAddress)
+		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.FromAddress)
 		if err != nil {
 			return err
 		}
