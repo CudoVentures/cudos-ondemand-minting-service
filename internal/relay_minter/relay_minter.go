@@ -25,6 +25,7 @@ import (
 	ggrpc "google.golang.org/grpc"
 )
 
+// The RelayerMinter is responsible for cudos chain monitoring and minting of the NFTs to its owner.
 func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage,
 	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder, emailService emailService) *relayMinter {
 	return &relayMinter{
@@ -38,17 +39,22 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		grpcConnector:  grpcConnector,
 		rpcConnector:   rpcConnector,
 		txCoder:        txCoder,
+		retries:        0,
 		emailService:   emailService,
 	}
 }
 
+// Starting a routine that is relaying the incoming transactions.
+// The relayer is retried in case of an error and nothing furcher is processes unless the error is resolved. A service is email is send in a case of an error as well.
+// The error counter is reset in case of successful relay.
+// The relayer exists once it reach max retires defined in the cfg.
 func (rm *relayMinter) Start(ctx context.Context) {
 	rm.logger.Info("starting relayer")
 
 	retries := 0
 
 	retry := func(err error) {
-		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", retries, rm.config.MaxRetries, err)
+		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", rm.retries, rm.config.MaxRetries, err)
 		rm.logger.Error(errors.New(errorMessage))
 		rm.emailService.SendEmail(errorMessage)
 
@@ -59,10 +65,10 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		case <-ctx.Done():
 		}
 
-		retries += 1
+		rm.retries += 1
 	}
 
-	for ctx.Err() == nil && retries < rm.config.MaxRetries {
+	for ctx.Err() == nil && rm.retries < rm.config.MaxRetries {
 		grpcConn, err := rm.grpcConnector.MakeGRPCClient(rm.config.ChainGRPC)
 		if err != nil {
 			retry(fmt.Errorf("dialing GRPC url (%s) failed: %s", rm.config.ChainGRPC, err))
@@ -93,6 +99,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		err = rm.startRelaying(ctx)
 
 		if err == contextDone {
+			rm.logger.Error(err)
 			return
 		}
 
@@ -102,6 +109,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 	rm.logger.Info("stopping relayer")
 }
 
+// Creating a ticker. It invokes the relayer function once per tick.
 func (rm *relayMinter) startRelaying(ctx context.Context) error {
 	ticker := time.NewTicker(rm.config.RelayInterval)
 
@@ -111,6 +119,8 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 			if err := rm.relay(ctx); err != nil {
 				return err
 			}
+			rm.logger.Info("successfull relay. resetting retries")
+			rm.retries = 0
 			ticker = time.NewTicker(rm.config.RelayInterval)
 		case <-ctx.Done():
 			return contextDone
@@ -118,13 +128,26 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 	}
 }
 
-// Get bank transfers to our address with height > s.Height
-// Start iterating them
+// Processing a single relay tick.
 //
-//			Check if given NFT UID is minted onchain, if true, then refund
-//	     		Before refunding make sure you didn't refunded already by checking for refunds for this tx hash
+// Getting the transactions from last know processed block stored in the state up to latest block.
+// Processing transactions one by one. If there is an error in some of the steps in the following the algorithm then the relay stops:
 //
-// If mint fails for some reason, refund the user following the same refund checks as above
+// 1. Find the corresponding information in the memo of a transaction. If no such information is available then no futher processing is required and moves to next transaction.
+//
+// 2. Checking if the transaction is a "minting transaction", which means whether this transaction resulted in a minted nft.
+// If so then no futher processsing is required because the NFT that is supposed to be minted by this transaction has already been minted. Proceed with next transaction.
+//
+// 4. Checking if the transaction has already been refunded.
+// If so then no further processing is required.
+//
+// 5. Getting NFT's information from the AuraPool using the informtion in transaction's memo. The AuraPool make all relevant checks and returns the correct NFT's data.
+// If invalid data is returns from the AuraPool then some of the criterias are not met and the transaction is refunded. After the refund no further processing is required.
+// From that point onwards only the information from AuraPool must be used
+//
+// 6. Checking if the NFT has ready been minted. If it is then the transaction is refunded. After the refund no further processing is required.
+//
+// 7. Trying to mint the NFT and refunding the transaction if minting is not successful.
 func (rm *relayMinter) relay(ctx context.Context) error {
 	rm.logger.Info("relay tick")
 	s, err := rm.stateStorage.GetState()
@@ -167,7 +190,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.Memo.RecipientAddress)
+		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.FromAddress)
 		if err != nil {
 			return err
 		}
@@ -179,7 +202,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 
 		onCudos, _ := sdk.NewIntFromString("1000000000000000000")
 
-		nftData, err := rm.GetNFTData(ctx, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount.Sub(sdk.NewCoin("acudos", onCudos)))
+		nftData, err := rm.GetNFTData(ctx, rm.config, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount.Sub(sdk.NewCoin("acudos", onCudos)))
 		if err != nil {
 			return err
 		}
@@ -208,13 +231,15 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 	}
 
 	// Update the height in state with the latest one from results because there will be no txs with lower height since blocks are finalized
-
 	s.Height = results.Txs[len(results.Txs)-1].Height
 
 	rm.logger.Info(fmt.Sprintf("update state to %d", s.Height))
 	return rm.stateStorage.UpdateState(s)
 }
 
+// Mints the NFT
+// If nft data received by the AuraPool is empty then return an error which will lead to a refund.
+// The hash of incoming transaction is added as memo of the mint transaction
 func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
 	emptyNftData := model.NFTData{}
 
@@ -257,19 +282,10 @@ func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, u
 	return nil
 }
 
-// Refund only if not refunded already by checking onchain
-// and the money that user sent are enough to cover the gas fees, otherwise skip
+// Refunds the user.
+// The refunded amount is equal to incoming funds - refund transaction costs. This is so in order not to prevent draining of service's wallet funds.
+// The hash of incoming transaction is added as memo of the refund transaction
 func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refundReceiver string, amount sdk.Coin) error {
-	// refund is already checked
-	// isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, refundReceiver)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// if isRefunded {
-	// 	return nil
-	// }
-
 	walletAddress, err := sdk.AccAddressFromBech32(rm.walletAddress.String())
 	if err != nil {
 		return fmt.Errorf("invalid wallet address (%s) during refund: %s", rm.walletAddress, err)
@@ -302,6 +318,9 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 	return err
 }
 
+// Checking if an NFT has already been minted.
+// The checking is done by fetching all transactions by NFT's id emited by marketplace module.
+// If such transaction exists then the NFT has already been minted
 func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
 
@@ -323,6 +342,10 @@ func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error
 	return false, nil
 }
 
+// Checking whether an incoming transaction resulted in minted NFT.
+// The checking is done by fetching all transactions by current buyer emited by marketplace module.
+// If there is a transaction with memo = incoming transaction's hash then it means that the incoming transaction has already beed succesfully processed and there is a minted NFT as a result.
+// This is TRUE because a mint transaction has a memo = incoming transaction's hash
 func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, incomingPaymentTxHash string) (bool, error) {
 	rm.logger.Infof("checking whether %s is minting transaction", incomingPaymentTxHash)
 	results, err := rm.queryNftMintTransactionByBuyer(ctx, buyerAddress, "minting transaction")
@@ -342,6 +365,10 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, i
 	return false, nil
 }
 
+// Checking whether an incoming transaction has already beed refunded.
+// The checking is done by fetching all transactions from service's wallet to buyer's wallet.
+// If there is a transaction with memo = incoming transaction's hash then it means that the incoming transaction has already beed refunded.
+// This is TRUE because a refund transaction has a memo = incoming transaction's hash
 func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, refundReceiver string) (bool, error) {
 	rm.logger.Infof("checking whether %s is refunded", incomingPaymentTxHash)
 	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", rm.walletAddress, refundReceiver))
@@ -392,6 +419,7 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, re
 	return false, nil
 }
 
+// Fetching marketplace transactions from the chain by nft's id
 func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
@@ -435,6 +463,7 @@ func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid, lo
 	return resultingArray, nil
 }
 
+// Fetching marketplace transactions from the chain by buyer's address
 func (rm *relayMinter) queryNftMintTransactionByBuyer(ctx context.Context, buyerAddress, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
@@ -482,8 +511,8 @@ func (rm *relayMinter) EstimateGas(ctx context.Context, msgs []sdk.Msg, memo str
 	return rm.txSender.EstimateGas(ctx, msgs, memo)
 }
 
-func (rm *relayMinter) GetNFTData(ctx context.Context, uid, recipientCudosAddress string, paidAmount sdk.Coin) (model.NFTData, error) {
-	return rm.nftDataClient.GetNFTData(ctx, uid, recipientCudosAddress, paidAmount)
+func (rm *relayMinter) GetNFTData(ctx context.Context, cfg config.Config, uid, recipientCudosAddress string, paidAmount sdk.Coin) (model.NFTData, error) {
+	return rm.nftDataClient.GetNFTData(ctx, rm.config, uid, recipientCudosAddress, paidAmount)
 }
 
 func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, error) {
@@ -500,6 +529,7 @@ func (rm *relayMinter) decodeTx(resultTx *ctypes.ResultTx) (sdk.TxWithMemo, erro
 	return txWithMemo, nil
 }
 
+// Parsing a transaction's memo.
 // If any error is returned here, it means that the transaction or message are invalid, so in the processing loop we skip this tx
 func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (receivedBankSend, error) {
 	txWithMemo, err := rm.decodeTx(resultTx)
@@ -577,6 +607,7 @@ type relayMinter struct {
 	grpcConnector  grpcConnector
 	rpcConnector   rpcConnector
 	txCoder        txCoder
+	retries        int
 	emailService   emailService
 }
 
@@ -624,7 +655,7 @@ type txQuerier interface {
 }
 
 type nftDataClient interface {
-	GetNFTData(ctx context.Context, uid, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error)
+	GetNFTData(ctx context.Context, cfg config.Config, uid, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error)
 }
 
 type relayLogger interface {

@@ -30,6 +30,7 @@ func NewConfig(envPath string) (Config, error) {
 		EmailFrom:         getEnv("EMAIL_FROM", ""),
 		ServiceEmail:      getEnv("SERVICE_EMAIL", ""),
 		SendgridApiKey:    getEnv("SENDGRID_API_KEY", ""),
+		AuraPoolApiKey:    getEnv("AURA_POOL_API_KEY", ""),
 		EmailSendInterval: getEnvAsDuration("EMAIL_SEND_INTERVAL", time.Minute*30),
 	}, nil
 }
@@ -78,6 +79,7 @@ type Config struct {
 	EmailFrom         string
 	ServiceEmail      string
 	SendgridApiKey    string
+	AuraPoolApiKey    string
 	EmailSendInterval time.Duration
 }
 
