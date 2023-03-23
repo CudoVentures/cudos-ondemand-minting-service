@@ -170,6 +170,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 
 	for i, result := range results.Txs {
 		incomingPaymentTxHash := result.Hash.String()
+		incomingPaymentTxHeight := result.Height
 		sendInfo, err := rm.getReceivedBankSendInfo(result)
 		if err != nil {
 			rm.logger.Warnf("getting received bank send info for tx(%s) failed: %s", incomingPaymentTxHash, err)
@@ -177,7 +178,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		}
 		rm.logger.Infof("%d: processing incomingPaymentTxHash(%s) at height(%d) with payment(%s)", i+1, incomingPaymentTxHash, result.Height, sendInfo.String())
 
-		isMintingTransaction, err := rm.isMintingTransaction(ctx, sendInfo.Memo.RecipientAddress, incomingPaymentTxHash)
+		isMintingTransaction, err := rm.isMintingTransaction(ctx, sendInfo.Memo.RecipientAddress, incomingPaymentTxHash, incomingPaymentTxHeight)
 		if err != nil {
 			return err
 		}
@@ -187,7 +188,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, sendInfo.FromAddress)
+		isRefunded, err := rm.isRefunded(ctx, incomingPaymentTxHash, incomingPaymentTxHeight, sendInfo.FromAddress)
 		if err != nil {
 			return err
 		}
@@ -205,7 +206,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		}
 		rm.logger.Infof("NFT Data(%s)", nftData.String())
 
-		isMintedNft, err := rm.isMintedNft(ctx, nftData.Id)
+		isMintedNft, err := rm.isMintedNft(ctx, nftData.Id, incomingPaymentTxHeight)
 		if err != nil {
 			return err
 		}
@@ -308,24 +309,24 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 
 	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 	refundTxHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, incomingPaymentTxHash, gasResult)
-	if err == nil {
-		rm.logger.Info(fmt.Sprintf("successful refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
+	if err != nil {
+		return err
 	}
 
-	return err
+	rm.logger.Info(fmt.Sprintf("successfull refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
+	return nil
 }
 
 // Checking if an NFT has already been minted.
 // The checking is done by fetching all transactions by NFT's id emited by marketplace module.
 // If such transaction exists then the NFT has already been minted
-func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
+func (rm *relayMinter) isMintedNft(ctx context.Context, uid string, incomingPaymentTxHashHeight int64) (bool, error) {
 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
-
 	if uid == "" {
 		return false, nil
 	}
 
-	results, err := rm.queryNftMintTransactionByUid(ctx, uid, "minted")
+	results, err := rm.queryNftMintTransactionByUid(ctx, uid, incomingPaymentTxHashHeight, "minted")
 	if err != nil {
 		return false, err
 	}
@@ -343,9 +344,9 @@ func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error
 // The checking is done by fetching all transactions by current buyer emited by marketplace module.
 // If there is a transaction with memo = incoming transaction's hash then it means that the incoming transaction has already beed succesfully processed and there is a minted NFT as a result.
 // This is TRUE because a mint transaction has a memo = incoming transaction's hash
-func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, incomingPaymentTxHash string) (bool, error) {
+func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, incomingPaymentTxHash string, incomingPaymentTxHashHeight int64) (bool, error) {
 	rm.logger.Infof("checking whether %s is minting transaction", incomingPaymentTxHash)
-	results, err := rm.queryNftMintTransactionByBuyer(ctx, buyerAddress, "minting transaction")
+	results, err := rm.queryNftMintTransactionByBuyer(ctx, buyerAddress, incomingPaymentTxHashHeight, "minting transaction")
 	if err != nil {
 		return false, err
 	}
@@ -366,9 +367,9 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, i
 // The checking is done by fetching all transactions from service's wallet to buyer's wallet.
 // If there is a transaction with memo = incoming transaction's hash then it means that the incoming transaction has already beed refunded.
 // This is TRUE because a refund transaction has a memo = incoming transaction's hash
-func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, refundReceiver string) (bool, error) {
+func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash string, incomingPaymentTxHeight int64, refundReceiver string) (bool, error) {
 	rm.logger.Infof("checking whether %s is refunded", incomingPaymentTxHash)
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", rm.walletAddress, refundReceiver))
+	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND transfer.sender='%s' AND transfer.recipient='%s'", incomingPaymentTxHeight, rm.walletAddress, refundReceiver))
 	if err != nil {
 		return false, err
 	}
@@ -417,10 +418,10 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, re
 }
 
 // Fetching marketplace transactions from the chain by nft's id
-func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid, logInfo string) ([]*decodedTxWithMemo, error) {
+func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid string, incomingPaymentTxHeight int64, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.uid='%s'", uid))
+	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.uid='%s'", incomingPaymentTxHeight, uid))
 	if err != nil {
 		return resultingArray, err
 	}
@@ -461,10 +462,10 @@ func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid, lo
 }
 
 // Fetching marketplace transactions from the chain by buyer's address
-func (rm *relayMinter) queryNftMintTransactionByBuyer(ctx context.Context, buyerAddress, logInfo string) ([]*decodedTxWithMemo, error) {
+func (rm *relayMinter) queryNftMintTransactionByBuyer(ctx context.Context, buyerAddress string, incomingPaymentTxHeight int64, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("marketplace_mint_nft.buyer='%s'", buyerAddress))
+	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.buyer='%s'", incomingPaymentTxHeight, buyerAddress))
 	if err != nil {
 		return resultingArray, err
 	}
