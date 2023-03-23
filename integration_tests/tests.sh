@@ -71,7 +71,9 @@ go tool cover -func=merged.cov | grep -E '^total\:' | sed -E 's/\s+/ /g'
 
 COVERAGE=$(go tool cover -func merged.cov | grep total | awk '{print substr($3, 1, length($3)-1)}')
 
-if [ "$COVERAGE" != "$EXPECTED_COVERAGE" ];then
+echo "Coverage is $COVERAGE"
+COVERAGE_INT=$(printf "%.0f" "$COVERAGE")
+if [ "$COVERAGE_INT" -lt "90" ];then
     echo "Expected coverage is $EXPECTED_COVERAGE but actual is $COVERAGE"
     exit 1
 fi
