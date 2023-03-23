@@ -263,8 +263,8 @@ func TestShouldFailRefundIfIsRefundFails(t *testing.T) {
 
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
-	txQuerier.On("Query", mock.Anything, fmt.Sprintf("transfer.sender='%s' AND transfer.recipient='%s'", relayMinter.walletAddress.String(), relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, failedQuery)
-	txQuerier.On("Query", mock.Anything, fmt.Sprintf("marketplace_mint_nft.buyer='%s'", relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, nil)
+	txQuerier.On("Query", mock.Anything, fmt.Sprintf("tx.height>=0 AND transfer.sender='%s' AND transfer.recipient='%s'", relayMinter.walletAddress.String(), relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, failedQuery)
+	txQuerier.On("Query", mock.Anything, fmt.Sprintf("tx.height>=0 AND marketplace_mint_nft.buyer='%s'", relayMinter.walletAddress.String())).Return(&ctypes.ResultTxSearch{}, nil)
 	txQuerier.On("Query", mock.Anything, fmt.Sprintf("tx.height>0 AND transfer.recipient='%s'", relayMinter.walletAddress.String())).Return(buildTestResultTxSearch(t, [][]sdk.Msg{
 		{
 			banktypes.NewMsgSend(relayMinter.walletAddress, relayMinter.walletAddress, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(100)))),
@@ -295,7 +295,7 @@ func TestShouldFailIsMintedIfQueryFails(t *testing.T) {
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
 	relayMinter.txQuerier = &txQuerier
 
-	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid")
+	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid", 0)
 	require.Equal(t, false, isMinted)
 	require.Equal(t, failedQuery, err)
 }
@@ -320,7 +320,7 @@ func TestIsMintedShouldLogErrorIfDecodingTxFails(t *testing.T) {
 	mctc.On("Decode", mock.Anything, mock.Anything).Return(&txWithoutMemo{}, nil)
 	relayMinter.txCoder = &mctc
 
-	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid")
+	isMinted, err := relayMinter.isMintedNft(context.Background(), "testuid", 0)
 	require.Equal(t, false, isMinted)
 	require.NoError(t, err)
 	require.Contains(t, mockLogger.output, "during check if minted, decoding tx () failed: invalid transaction () type")

@@ -65,15 +65,15 @@ func newMockTxQuerier(bankSendQueryResults *ctypes.ResultTxSearch, mintQueryResu
 }
 
 func (mq *mockTxQuerier) Query(ctx context.Context, query string) (*ctypes.ResultTxSearch, error) {
-	if strings.Contains(query, "tx.height") {
-		return mq.bankSendQueryResults, nil
-	} else if strings.Contains(query, "transfer.sender") {
+	if strings.Contains(query, "transfer.sender") {
 		return mq.refundQueryResults, nil
 	} else if strings.Contains(query, "marketplace_mint_nft") {
 		if mq.failMintTxsQuery {
 			return nil, errors.New("failed to query mint txs")
 		}
 		return mq.mintQueryResults, nil
+	} else if strings.Contains(query, "tx.height") {
+		return mq.bankSendQueryResults, nil
 	}
 
 	panic("invalid query")
