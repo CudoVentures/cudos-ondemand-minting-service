@@ -18,7 +18,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	"github.com/tendermint/tendermint/libs/bytes"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -50,8 +49,6 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 // The relayer exists once it reach max retires defined in the cfg.
 func (rm *relayMinter) Start(ctx context.Context) {
 	rm.logger.Info("starting relayer")
-
-	retries := 0
 
 	retry := func(err error) {
 		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", rm.retries, rm.config.MaxRetries, err)
@@ -208,7 +205,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 		}
 		rm.logger.Infof("NFT Data(%s)", nftData.String())
 
-		isMintedNft, err := rm.isMintedNft(ctx, sendInfo.Memo.UID)
+		isMintedNft, err := rm.isMintedNft(ctx, nftData.Id)
 		if err != nil {
 			return err
 		}
@@ -355,7 +352,7 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, i
 
 	for _, result := range results {
 		tx := result.TxWithMemo
-		if bytes.HexBytes(tx.GetMemo()).String() == incomingPaymentTxHash {
+		if tx.GetMemo() == incomingPaymentTxHash {
 			rm.logger.Infof("%s is minting tx: true [%s]", incomingPaymentTxHash, result.Hash)
 			return true, nil
 		}
@@ -408,7 +405,7 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash, re
 				continue
 			}
 
-			if bytes.HexBytes(txWithMemo.GetMemo()).String() == incomingPaymentTxHash {
+			if txWithMemo.GetMemo() == incomingPaymentTxHash {
 				rm.logger.Infof("%s refunded: true [%s]", incomingPaymentTxHash, result.Hash.String())
 				return true, nil
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -36,7 +37,7 @@ func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData, getNftData
 	}
 }
 
-func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error) {
+func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, cfg config.Config, uid, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error) {
 	if err, ok := mtic.getNftDataErrors[uid]; ok {
 		return model.NFTData{}, err
 	}

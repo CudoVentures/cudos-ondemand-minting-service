@@ -80,9 +80,6 @@ func TestRelay(t *testing.T) {
 	testCases := buildTestCases(t, &encodingConfig, relayMinter.walletAddress)
 
 	for _, testCase := range testCases {
-		// if testCase.name != "ShouldFailRelayIfAlreadyMintedAndRefundFails" {
-		// 	continue
-		// }
 		t.Run(testCase.name, func(t *testing.T) {
 			relayMinter.txQuerier = newMockTxQuerier(testCase.receivedBankSendTxs, testCase.mintTxs,
 				testCase.sentBankSendTxs, testCase.failMintTxsQuery)

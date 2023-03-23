@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/marshal"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -18,13 +19,13 @@ import (
 
 func TestShouldFailGetNFTDataWithInvalidUrl(t *testing.T) {
 	client := NewTokenisedInfraClient(badUrl, marshal.NewJsonMarshaler())
-	_, err := client.GetNFTData(context.Background(), "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
+	_, err := client.GetNFTData(context.Background(), config.Config{}, "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.Error(t, err)
 }
 
 func TestShouldFailGetNFTDataWithNotRunningService(t *testing.T) {
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
-	_, err := client.GetNFTData(context.Background(), "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
+	_, err := client.GetNFTData(context.Background(), config.Config{}, "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.Error(t, err)
 }
 
@@ -38,7 +39,7 @@ func TestShouldFailGetNFTDataIfInvalidJSONResponse(t *testing.T) {
 	defer ws.server.Shutdown(context.Background())
 
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
-	_, err = client.GetNFTData(context.Background(), "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
+	_, err = client.GetNFTData(context.Background(), config.Config{}, "testuid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "invalid character"))
 }
@@ -53,7 +54,7 @@ func TestGetNFTDataShouldReturnEmptyDataWithNoErrWhenNotUIDNotFound(t *testing.T
 	defer ws.server.Shutdown(context.Background())
 
 	client := NewTokenisedInfraClient(localServiceUrl, marshal.NewJsonMarshaler())
-	data, err := client.GetNFTData(context.Background(), "notfounduid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
+	data, err := client.GetNFTData(context.Background(), config.Config{}, "notfounduid", "address", sdk.NewCoin("acudos", sdk.NewIntFromUint64(300)))
 	require.NoError(t, err)
 	require.Equal(t, model.NFTData{}, data)
 }
