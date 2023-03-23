@@ -10,6 +10,7 @@ make install
 cd $WORKDIR
 cp $WORKDIR'/root-node.local.env' $WORKDIR'/cudos-builders/docker/root-node/root-node.local.env'
 
+sed -i '/# add faucet account/ r ./add-marketplace-admin.sh' $WORKDIR'/cudos-builders/docker/root-node/scripts/init-root.sh'
 sed -i 's/keyring-backend os/keyring-backend test/g' $WORKDIR'/cudos-builders/docker/root-node/scripts/init-root.sh'
 
 cd $WORKDIR'/cudos-builders/tools-nodejs/init-local-node-without-docker'

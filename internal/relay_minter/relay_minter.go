@@ -10,7 +10,6 @@ import (
 
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
-	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	queryacc "github.com/CudoVentures/cudos-ondemand-minting-service/internal/query/account"
 	relaytx "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
@@ -27,7 +26,7 @@ import (
 
 // The RelayerMinter is responsible for cudos chain monitoring and minting of the NFTs to its owner.
 func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, cfg config.Config, stateStorage stateStorage,
-	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder) *relayMinter {
+	nftDataClient nftDataClient, privKey *secp256k1.PrivKey, grpcConnector grpcConnector, rpcConnector rpcConnector, txCoder txCoder, emailService emailService) *relayMinter {
 	return &relayMinter{
 		encodingConfig: encodingConfig,
 		config:         cfg,
@@ -40,6 +39,7 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 		rpcConnector:   rpcConnector,
 		txCoder:        txCoder,
 		retries:        0,
+		emailService:   emailService,
 	}
 }
 
@@ -48,12 +48,12 @@ func NewRelayMinter(logger relayLogger, encodingConfig *params.EncodingConfig, c
 // The error counter is reset in case of successful relay.
 // The relayer exists once it reach max retires defined in the cfg.
 func (rm *relayMinter) Start(ctx context.Context) {
-	rm.logger.Info("start relayer")
+	rm.logger.Info("starting relayer")
 
 	retry := func(err error) {
 		errorMessage := fmt.Sprintf("relaying failed on retry %d of %d: %v", rm.retries, rm.config.MaxRetries, err)
 		rm.logger.Error(errors.New(errorMessage))
-		email.SendEmail(&rm.config, errorMessage)
+		rm.emailService.SendEmail(errorMessage)
 
 		ticker := time.NewTicker(rm.config.RetryInterval)
 
@@ -103,7 +103,7 @@ func (rm *relayMinter) Start(ctx context.Context) {
 		retry(err)
 	}
 
-	rm.logger.Info("end relayer")
+	rm.logger.Info("stopping relayer")
 }
 
 // Creating a ticker. It invokes the relayer function once per tick.
@@ -222,7 +222,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			errMint = fmt.Errorf("failed to mint: %s", errMint)
 			rm.logger.Warnf("minting of NFT(%s) failed from address(%s) with tx incomingPaymentTxHash(%s) with error[%v]", nftData.Id, sendInfo.FromAddress, incomingPaymentTxHash, errMint)
 			if errRefund := rm.refund(ctx, incomingPaymentTxHash, sendInfo.FromAddress, sendInfo.Amount); errRefund != nil {
-				return fmt.Errorf("%s, failed to refund after unsuccessfull minting: %s", errMint, errRefund)
+				return fmt.Errorf("%s, failed to refund after unsuccessful minting: %s", errMint, errRefund)
 			}
 		}
 	}
@@ -309,7 +309,7 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 	msgSend = banktypes.NewMsgSend(walletAddress, refundAddress, sdk.NewCoins(sdk.NewCoin(rm.config.PaymentDenom, amountWithoutGas)))
 	refundTxHash, err := rm.txSender.SendTx(ctx, []sdk.Msg{msgSend}, incomingPaymentTxHash, gasResult)
 	if err == nil {
-		rm.logger.Info(fmt.Sprintf("successfull refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
+		rm.logger.Info(fmt.Sprintf("successful refund incomingPaymentTxHash(%s) to address(%s) with refund tx hash(%s)", incomingPaymentTxHash, refundReceiver, refundTxHash))
 	}
 
 	return err
@@ -320,6 +320,11 @@ func (rm *relayMinter) refund(ctx context.Context, incomingPaymentTxHash, refund
 // If such transaction exists then the NFT has already been minted
 func (rm *relayMinter) isMintedNft(ctx context.Context, uid string) (bool, error) {
 	rm.logger.Infof("checking whether NFT(%s) is minted", uid)
+
+	if uid == "" {
+		return false, nil
+	}
+
 	results, err := rm.queryNftMintTransactionByUid(ctx, uid, "minted")
 	if err != nil {
 		return false, err
@@ -600,6 +605,7 @@ type relayMinter struct {
 	rpcConnector   rpcConnector
 	txCoder        txCoder
 	retries        int
+	emailService   emailService
 }
 
 type mintMemo struct {
@@ -663,6 +669,10 @@ type grpcConnector interface {
 
 type rpcConnector interface {
 	MakeRPCClient(url string) (*rpchttp.HTTP, error)
+}
+
+type emailService interface {
+	SendEmail(content string)
 }
 
 type decodedTxWithMemo struct {

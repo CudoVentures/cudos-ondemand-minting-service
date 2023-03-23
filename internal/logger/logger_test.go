@@ -20,5 +20,9 @@ func TestShouldLogSuccessfully(t *testing.T) {
 	log := zerolog.New(zerolog.ConsoleWriter{Out: buf, NoColor: true})
 	zlogger := NewLogger(log.With().Logger())
 	zlogger.Error(errors.New("test"))
-	require.Equal(t, "<nil> ERR  error=test\n", buf.String())
+	zlogger.Info("test")
+	zlogger.Infof("test%s", "test")
+	zlogger.Warn("test")
+	zlogger.Warnf("test%s", "test")
+	require.Equal(t, "<nil> ERR  error=test\n<nil> INF test\n<nil> INF testtest\n<nil> WRN test\n<nil> WRN testtest\n", buf.String())
 }

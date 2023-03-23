@@ -3,8 +3,10 @@ package relayminter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -35,7 +37,7 @@ func newTokenisedInfraClient(nftDataEntires map[string]model.NFTData, getNftData
 	}
 }
 
-func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string) (model.NFTData, error) {
+func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, cfg config.Config, uid, recipientCudosAddress string, amountPaid sdk.Coin) (model.NFTData, error) {
 	if err, ok := mtic.getNftDataErrors[uid]; ok {
 		return model.NFTData{}, err
 	}
@@ -44,14 +46,6 @@ func (mtic *mockTokenisedInfraClient) GetNFTData(ctx context.Context, uid string
 		return data, nil
 	}
 	return model.NFTData{}, nil
-}
-
-func (mtic *mockTokenisedInfraClient) MarkMintedNFT(ctx context.Context, mintedTxHash, uid string) error {
-	err, ok := mtic.markNftErrors[uid]
-	if ok {
-		return err
-	}
-	return nil
 }
 
 type mockTokenisedInfraClient struct {
@@ -132,6 +126,34 @@ func (ml *mockLogger) Error(err error) {
 		ml.output += "\r\n"
 	}
 	ml.output += err.Error()
+}
+
+func (ml *mockLogger) Info(msg string) {
+	if len(ml.output) > 0 {
+		ml.output += "\r\n"
+	}
+	ml.output += msg
+}
+
+func (ml *mockLogger) Infof(format string, v ...interface{}) {
+	if len(ml.output) > 0 {
+		ml.output += "\r\n"
+	}
+	ml.output += fmt.Sprintf(format, v...)
+}
+
+func (ml *mockLogger) Warn(msg string) {
+	if len(ml.output) > 0 {
+		ml.output += "\r\n"
+	}
+	ml.output += msg
+}
+
+func (ml *mockLogger) Warnf(format string, v ...interface{}) {
+	if len(ml.output) > 0 {
+		ml.output += "\r\n"
+	}
+	ml.output += fmt.Sprintf(format, v...)
 }
 
 type mockLogger struct {

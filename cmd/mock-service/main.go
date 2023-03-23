@@ -16,7 +16,7 @@ import (
 func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/nft/minted/check-status", getNFTMintedHandler())
-	r.HandleFunc("/nft", getNFTHandler())
+	r.HandleFunc("/api/v1/nft/on-demand-minting-nft/{uid}/{recipient}/{amount}", getNFTHandler())
 
 	log.Info().Msg(fmt.Sprintf("Listening on port: %d", listeningPort))
 	srv := &http.Server{
@@ -62,8 +62,7 @@ func getNFTMintedHandler() func(http.ResponseWriter, *http.Request) {
 
 func getNFTHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid := r.URL.Query().Get("uid")
-
+		uid := mux.Vars(r)["uid"]
 		nft, ok := nfts[uid]
 		if !ok {
 			log.Error().Err(fmt.Errorf("nft with uid (%s) not found", uid)).Send()
@@ -83,26 +82,28 @@ func getNFTHandler() func(http.ResponseWriter, *http.Request) {
 
 var nfts = map[string]model.NFTData{
 	"nftuid1": {
-		Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+		Price:           sdk.NewIntFromUint64(8000000000000000000),
 		Name:            "test nft name",
 		Uri:             "test nft uri",
 		Data:            "test nft data",
 		DenomID:         "testdenom",
-		Status:          model.ApprovedNFTStatus,
-		PriceValidUntil: time.Now().UnixMilli() + 10000,
+		Status:          model.QueuedNFTStatus,
+		PriceValidUntil: tomorrow,
 	},
 	"nftuid2": {
-		Price:           sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)),
+		Price:           sdk.NewIntFromUint64(8000000000000000000),
 		Name:            "test nft name",
 		Uri:             "test nft uri",
 		Data:            "test nft data",
 		DenomID:         "testdenom",
 		Status:          model.RejectedNFTStatus,
-		PriceValidUntil: time.Now().UnixMilli() + 10000,
+		PriceValidUntil: tomorrow,
 	},
 }
 
 const listeningPort = 8080
+
+var tomorrow = time.Now().Add(time.Hour * 24).UnixMilli()
 
 type mintTx struct {
 	TxHash string `json:"tx_hash"`
