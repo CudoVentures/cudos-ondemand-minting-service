@@ -1,6 +1,7 @@
 package relayminter
 
 import (
+	"encoding/hex"
 	"errors"
 	"testing"
 
@@ -9,7 +10,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/libs/bytes"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
@@ -166,7 +166,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
-			expectedLogOutput:   "minting of NFT(nftuid#0) failed from address(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg) with tx incomingPaymentTxHash() with error[failed to mint: nft (nftuid#0) was not found]\r\nduring refund received amount without gas (994995000000000000) is smaller than minimum refund amount (5000000000000000000)",
+			expectedLogOutput:   "minting of NFT() failed from address(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg) with tx incomingPaymentTxHash() with error[failed to mint: nft () was not found]\r\nduring refund received amount without gas (994995000000000000) is smaller than minimum refund amount (5000000000000000000)",
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
@@ -413,18 +413,18 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 				},
 			}, []string{
 				"{\"uuid\":\"nftuid#1\"}",
-			}, encodingConfig, "refundhash#1"),
+			}, encodingConfig, "1234567890"),
 
 			sentBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
 					banktypes.NewMsgSend(wallet, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000)))),
 				},
 			}, []string{
-				"refundhash#1",
+				"1234567890",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
-			expectedLogOutput:   "transaction(726566756E64686173682331) has already been refunded to buyer(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg)",
+			expectedLogOutput:   "transaction(1234567890) has already been refunded to buyer(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg)",
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},
@@ -476,7 +476,7 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
-			expectedLogOutput:   "failed to mint: nft (notfoundnftuid) was not found",
+			expectedLogOutput:   "failed to mint: nft () was not found",
 			expectedOutputMemos: []string{""},
 			expectedOutputMsgs: []sdk.Msg{
 				banktypes.NewMsgSend(wallet, buyer1, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(8000000000000000000).Sub(sdk.NewIntFromUint64(5005000000000000))))),
@@ -597,8 +597,13 @@ func buildTestResultTxSearch(t *testing.T, msgs [][]sdk.Msg, memos []string, enc
 	resultTxSearch := ctypes.ResultTxSearch{}
 
 	for i := range msgs {
+		hash, err := hex.DecodeString(txHash)
+		if err != nil {
+			panic(err)
+		}
+
 		resultTx := &ctypes.ResultTx{
-			Hash:   bytes.HexBytes(txHash),
+			Hash:   hash,
 			Height: int64(i),
 			Tx:     buildTestTx(t, msgs[i], memos[i], encodingConfig),
 		}
