@@ -63,7 +63,8 @@ func runService(ctx context.Context) {
 	cudosapp.SetConfig()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
 
-	state := state.NewFileState(cfg.StateFile)
+	state := state.NewFileState()
+	state.CreateStateFileIfNotExists(cfg.StartingHeight)
 
 	infraClient := infraclient.NewTokenisedInfraClient(cfg.AuraPoolBackend, marshal.NewJsonMarshaler())
 

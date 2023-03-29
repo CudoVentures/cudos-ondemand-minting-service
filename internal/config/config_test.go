@@ -15,7 +15,7 @@ func TestShouldPass(t *testing.T) {
 		ChainRPC:          "http://127.0.0.1:26657",
 		ChainGRPC:         "127.0.0.1:9090",
 		AuraPoolBackend:   "http://127.0.0.1:8080",
-		StateFile:         "state.json",
+		StartingHeight:    2,
 		MaxRetries:        10,
 		RetryInterval:     30 * time.Second,
 		RelayInterval:     5 * time.Second,
@@ -73,7 +73,7 @@ func TestHasValidEmailSettings(t *testing.T) {
 }
 
 func TestString(t *testing.T) {
-	expectedCfgString := "Config { WalletMnemonic(Hidden for security), ChainID(cudos-local-network), ChainRPC(http://127.0.0.1:26657), ChainGRPC(127.0.0.1:9090), AuraPoolBackend(http://127.0.0.1:8080), StateFile(state.json), MaxRetries(10), RetryInterval(30000000000), RelayInterval(5000000000), PaymentDenom(acudos), Port(3000) PrettyLogging(0) SendgridApiKey(Hidden for security) EmailFrom() ServiceEmail() EmailSendInterval(1800000000000)}"
+	expectedCfgString := "Config { WalletMnemonic(Hidden for security), ChainID(cudos-local-network), ChainRPC(http://127.0.0.1:26657), ChainGRPC(127.0.0.1:9090), AuraPoolBackend(http://127.0.0.1:8080), StartingHeight(2), MaxRetries(10), RetryInterval(30000000000), RelayInterval(5000000000), PaymentDenom(acudos), Port(3000) PrettyLogging(0) SendgridApiKey(Hidden for security) EmailFrom() ServiceEmail() EmailSendInterval(1800000000000)}"
 
 	haveCfg, err := NewConfig("../../.env.example")
 	require.NoError(t, err)
