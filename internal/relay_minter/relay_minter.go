@@ -613,6 +613,7 @@ type mintMemo struct {
 	UID               string `json:"uuid"`
 	RecipientAddress  string `json:"recipientAddress"`
 	ContractPaymentId string `json:"contractPaymentId"`
+	EthTxHash         string `json:"ethTxHash"`
 }
 
 func (t *mintMemo) String() string {
