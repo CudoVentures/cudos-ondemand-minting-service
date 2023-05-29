@@ -38,7 +38,7 @@ func main() {
 // Without this state the service should starts always from block 1 therefore processing everything from 1 to current network height each time.
 // Although it is completely safe to process a block multiple times it is just a waste of time. So state is used in order not to waste time for processing already processed blocks.
 //
-// - Creating AuraPool client;
+// - Creating CudosMarkets client;
 //
 // - Creating Relayer instance.
 //
@@ -66,7 +66,7 @@ func runService(ctx context.Context) {
 	state := state.NewFileState()
 	state.CreateStateFileIfNotExists(cfg.StartingHeight)
 
-	infraClient := infraclient.NewTokenisedInfraClient(cfg.AuraPoolBackend, marshal.NewJsonMarshaler())
+	infraClient := infraclient.NewTokenisedInfraClient(cfg.CudosMarketsBackend, marshal.NewJsonMarshaler())
 
 	privKey, err := key.PrivKeyFromMnemonic(cfg.WalletMnemonic)
 	if err != nil {

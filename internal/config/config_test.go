@@ -10,18 +10,23 @@ import (
 
 func TestShouldPass(t *testing.T) {
 	expectedCfg := Config{
-		WalletMnemonic:    "rebel wet poet torch carpet gaze axis ribbon approve depend inflict menu",
-		ChainID:           "cudos-local-network",
-		ChainRPC:          "http://127.0.0.1:26657",
-		ChainGRPC:         "127.0.0.1:9090",
-		AuraPoolBackend:   "http://127.0.0.1:8080",
-		StartingHeight:    2,
-		MaxRetries:        10,
-		RetryInterval:     30 * time.Second,
-		RelayInterval:     5 * time.Second,
-		PaymentDenom:      "acudos",
-		Port:              3000,
-		EmailSendInterval: 30 * time.Minute,
+		WalletMnemonic:      "rebel wet poet torch carpet gaze axis ribbon approve depend inflict menu",
+		ChainID:             "cudos-local-network",
+		ChainRPC:            "http://127.0.0.1:26657",
+		ChainGRPC:           "127.0.0.1:9090",
+		CudosMarketsBackend: "http://127.0.0.1:8080",
+		StartingHeight:      2,
+		MaxRetries:          10,
+		RetryInterval:       30 * time.Second,
+		RelayInterval:       5 * time.Second,
+		PaymentDenom:        "acudos",
+		Port:                3000,
+		PrettyLogging:       0,
+		SendgridApiKey:      "",
+		EmailFrom:           "",
+		ServiceEmail:        "",
+		EmailSendInterval:   30 * time.Minute,
+		CudosMarketsApiKey:  "",
 	}
 
 	haveCfg, err := NewConfig("../../.env.example")
@@ -73,7 +78,7 @@ func TestHasValidEmailSettings(t *testing.T) {
 }
 
 func TestString(t *testing.T) {
-	expectedCfgString := "Config { WalletMnemonic(Hidden for security), ChainID(cudos-local-network), ChainRPC(http://127.0.0.1:26657), ChainGRPC(127.0.0.1:9090), AuraPoolBackend(http://127.0.0.1:8080), StartingHeight(2), MaxRetries(10), RetryInterval(30000000000), RelayInterval(5000000000), PaymentDenom(acudos), Port(3000) PrettyLogging(0) SendgridApiKey(Hidden for security) EmailFrom() ServiceEmail() EmailSendInterval(1800000000000)}"
+	expectedCfgString := "Config { WalletMnemonic(Hidden for security), ChainID(cudos-local-network), ChainRPC(http://127.0.0.1:26657), ChainGRPC(127.0.0.1:9090), CudosMarketsBackend(http://127.0.0.1:8080), StartingHeight(2), MaxRetries(10), RetryInterval(30000000000), RelayInterval(5000000000), PaymentDenom(acudos), Port(3000) PrettyLogging(0) SendgridApiKey(Hidden for security) EmailFrom() ServiceEmail() EmailSendInterval(1800000000000) CudosMarketsApiKey()}"
 
 	haveCfg, err := NewConfig("../../.env.example")
 	require.NoError(t, err)

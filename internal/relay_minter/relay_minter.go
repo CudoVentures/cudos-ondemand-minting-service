@@ -138,9 +138,9 @@ func (rm *relayMinter) startRelaying(ctx context.Context) error {
 // 4. Checking if the transaction has already been refunded.
 // If so then no further processing is required.
 //
-// 5. Getting NFT's information from the AuraPool using the informtion in transaction's memo. The AuraPool make all relevant checks and returns the correct NFT's data.
-// If invalid data is returns from the AuraPool then some of the criterias are not met and the transaction is refunded. After the refund no further processing is required.
-// From that point onwards only the information from AuraPool must be used
+// 5. Getting NFT's information from the CudosMarkets using the informtion in transaction's memo. The CudosMarkets make all relevant checks and returns the correct NFT's data.
+// If invalid data is returns from the CudosMarkets then some of the criterias are not met and the transaction is refunded. After the refund no further processing is required.
+// From that point onwards only the information from CudosMarkets must be used
 //
 // 6. Checking if the NFT has ready been minted. If it is then the transaction is refunded. After the refund no further processing is required.
 //
@@ -236,7 +236,7 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 }
 
 // Mints the NFT
-// If nft data received by the AuraPool is empty then return an error which will lead to a refund.
+// If nft data received by the CudosMarkets is empty then return an error which will lead to a refund.
 // The hash of incoming transaction is added as memo of the mint transaction
 func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, uid, recipient string, nftData model.NFTData, amount sdk.Coin) error {
 	emptyNftData := model.NFTData{}
@@ -245,12 +245,12 @@ func (rm *relayMinter) mint(ctx context.Context, incomingPaymentTxHash string, u
 		return fmt.Errorf("nft (%s) was not found", uid)
 	}
 
-	// this check is in AuraPool, but it can stay here just in case
+	// this check is in CudosMarkets, but it can stay here just in case
 	if nftData.PriceValidUntil < time.Now().UnixMilli() {
 		return fmt.Errorf("NftPrice valid time expired. Not minting it")
 	}
 
-	// this check is in AuraPool, but it can stay here just in case
+	// this check is in CudosMarkets, but it can stay here just in case
 	if nftData.Status != model.QueuedNFTStatus {
 		return fmt.Errorf("nft (%s) has invalid status (%s)", uid, nftData.Status)
 	}

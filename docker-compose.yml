@@ -7,19 +7,8 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    environment:
-      WALLET_MNEMONIC: ${WALLET_MNEMONIC}
-      CHAIN_ID: ${CHAIN_ID}
-      CHAIN_RPC: ${CHAIN_RPC}
-      CHAIN_GRPC: ${CHAIN_GRPC}
-      AURA_POOL_BACKEND: ${AURA_POOL_BACKEND}
-      STATE_FILE: ${STATE_FILE}
-      MAX_RETRIES: ${MAX_RETRIES}
-      RETRY_INTERVAL: ${RETRY_INTERVAL}
-      RELAY_INTERVAL: ${RELAY_INTERVAL}
-      PAYMENT_DENOM: ${PAYMENT_DENOM}
     logging:
       driver: "json-file"
       options:
-        max-size: "128m"
-        max-file: "1"
+        max-size: "32m"
+        max-file: "16"

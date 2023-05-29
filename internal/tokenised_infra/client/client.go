@@ -35,7 +35,7 @@ func (tic *tokenisedInfraClient) GetNFTData(ctx context.Context, cfg config.Conf
 		return model.NFTData{}, err
 	}
 
-	req.Header.Set("aura-pool-api-key", cfg.AuraPoolApiKey)
+	req.Header.Set("cudos-markets-api-key", cfg.CudosMarketsApiKey)
 
 	res, err := tic.client.Do(req)
 	if err != nil {
