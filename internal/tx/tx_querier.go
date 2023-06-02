@@ -37,6 +37,11 @@ func (tq *txQuerier) Query(ctx context.Context, query string) (*ctypes.ResultTxS
 		from := (page - 1) * itemsPerPage
 		to := page*itemsPerPage - 1
 		// fmt.Printf("[%d; %d] -> %d\n", from, to, allResults.TotalCount)
+
+		// there are no events so we can break it directly
+		if allResults.TotalCount == 0 {
+			break
+		}
 		// the "+1" in from and to are because from,to are 0th based, while TotalCount is 1 based
 		if from+1 <= allResults.TotalCount && allResults.TotalCount <= to+1 {
 			break
