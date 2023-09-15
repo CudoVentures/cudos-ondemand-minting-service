@@ -301,6 +301,15 @@ func (mtc *mockTxClient) BroadcastTx(ctx context.Context, in *txtypes.BroadcastT
 	return args.Get(0).(*txtypes.BroadcastTxResponse), args.Error(1)
 }
 
+func (mtc *mockTxClient) GetTx(ctx context.Context, in *txtypes.GetTxRequest, opts ...grpc.CallOption) (*txtypes.GetTxResponse, error) {
+	return &tx.GetTxResponse{
+		Tx: nil,
+		TxResponse: &sdk.TxResponse{
+			Code: 0,
+		},
+	}, nil
+}
+
 type mockAccountInfoClient struct {
 	mock.Mock
 }

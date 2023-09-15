@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"cosmossdk.io/simapp/params"
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/require"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
 func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet sdk.AccAddress) []testCase {
@@ -159,14 +159,14 @@ func buildTestCases(t *testing.T, encodingConfig *params.EncodingConfig, wallet 
 			name: "ShouldSkipRefundIfWhenSubtractingGasFeesTheAmountIsNegative",
 			receivedBankSendTxs: buildTestResultTxSearch(t, [][]sdk.Msg{
 				{
-					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(1000000000000000000)))),
+					banktypes.NewMsgSend(buyer1, wallet, sdk.NewCoins(sdk.NewCoin("acudos", sdk.NewIntFromUint64(1500000000000000000)))),
 				},
 			}, []string{
 				"{\"uuid\":\"nftuid#0\"}",
 			}, encodingConfig, ""),
 
 			expectedError:       nil,
-			expectedLogOutput:   "minting of NFT() failed from address(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg) with tx incomingPaymentTxHash() with error[failed to mint: nft () was not found]\r\nduring refund received amount without gas (994995000000000000) is smaller than minimum refund amount (5000000000000000000)",
+			expectedLogOutput:   "minting of NFT() failed from address(cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg) with tx incomingPaymentTxHash() with error[failed to mint: nft () was not found]\r\nduring refund received amount without gas (1494995000000000000) is smaller than minimum refund amount (5000000000000000000)",
 			expectedOutputMemos: []string{},
 			expectedOutputMsgs:  []sdk.Msg{},
 		},

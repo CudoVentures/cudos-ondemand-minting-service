@@ -8,19 +8,19 @@ import (
 	"sort"
 	"time"
 
+	"cosmossdk.io/simapp/params"
 	marketplacetypes "github.com/CudoVentures/cudos-node/x/marketplace/types"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	queryacc "github.com/CudoVentures/cudos-ondemand-minting-service/internal/query/account"
 	relaytx "github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 	ggrpc "google.golang.org/grpc"
 )
 
@@ -198,8 +198,8 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 			continue
 		}
 
-		onCudos, _ := sdk.NewIntFromString("1000000000000000000")
-
+		// 300k gas * default gas price = 1.5CUDOS
+		onCudos, _ := sdk.NewIntFromString("1500000000000000000")
 		nftData, err := rm.GetNFTData(ctx, rm.config, sendInfo.Memo.UID, sendInfo.Memo.RecipientAddress, sendInfo.Amount.Sub(sdk.NewCoin("acudos", onCudos)))
 		if err != nil {
 			return err
@@ -585,7 +585,7 @@ func (rm *relayMinter) getReceivedBankSendInfo(resultTx *ctypes.ResultTx) (recei
 
 const (
 	gasPrice        = uint64(5000000000000)
-	gasAdjustment   = float64(1.3)
+	gasAdjustment   = float64(1.5)
 	minRefundAmount = 5000000000000000000
 )
 

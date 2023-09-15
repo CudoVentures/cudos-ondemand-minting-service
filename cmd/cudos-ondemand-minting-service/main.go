@@ -60,7 +60,7 @@ func runService(ctx context.Context) {
 
 	log.Info().Msgf("starting on-demand-minting-service using config %s", cfg.String())
 
-	cudosapp.SetConfig()
+	cudosapp.InitializeSdk()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
 
 	state := state.NewFileState()

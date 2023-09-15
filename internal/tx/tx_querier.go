@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 )
 
 func NewTxQuerier(node txSearcher) *txQuerier {

@@ -1,9 +1,9 @@
 package tx
 
 import (
+	"cosmossdk.io/simapp/params"
 	client "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	signingtypes "github.com/cosmos/cosmos-sdk/types/tx/signing"

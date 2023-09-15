@@ -24,5 +24,5 @@ func TestShouldLogSuccessfully(t *testing.T) {
 	zlogger.Infof("test%s", "test")
 	zlogger.Warn("test")
 	zlogger.Warnf("test%s", "test")
-	require.Equal(t, "<nil> ERR  error=test\n<nil> INF test\n<nil> INF testtest\n<nil> WRN test\n<nil> WRN testtest\n", buf.String())
+	require.Equal(t, "<nil> ERR error=test\n<nil> INF test\n<nil> INF testtest\n<nil> WRN test\n<nil> WRN testtest\n", buf.String())
 }

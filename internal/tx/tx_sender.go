@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"cosmossdk.io/simapp/params"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	client "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
@@ -43,13 +44,36 @@ func (ts *txSender) SendTx(ctx context.Context, msgs []sdk.Msg, memo string, gas
 		return "", err
 	}
 
-	broadcastRes, err := ts.txClient.BroadcastTx(ctx, &txtypes.BroadcastTxRequest{TxBytes: txBytes, Mode: txtypes.BroadcastMode_BROADCAST_MODE_BLOCK})
+	broadcastRes, err := ts.txClient.BroadcastTx(ctx, &txtypes.BroadcastTxRequest{TxBytes: txBytes, Mode: txtypes.BroadcastMode_BROADCAST_MODE_SYNC})
 	if err != nil {
 		return "", err
 	}
 
 	if broadcastRes.TxResponse == nil || broadcastRes.TxResponse.Code != 0 {
 		return "", fmt.Errorf("broadcasting of tx failed: %+v", broadcastRes)
+	}
+
+	var txQueryError error
+	txReq := &txtypes.GetTxRequest{
+		Hash: broadcastRes.TxResponse.TxHash,
+	}
+	// trying to query tx 5 times
+	for i := 0; i < 5; i++ {
+		time.Sleep(6 * time.Second) // wait for a block
+
+		txResp, txQueryError := ts.txClient.GetTx(ctx, txReq)
+		if txQueryError != nil {
+			continue
+		}
+
+		if txResp.TxResponse == nil || txResp.TxResponse.Code != 0 {
+			return "", fmt.Errorf("broadcasted of tx failed: %+v", broadcastRes)
+		}
+		break
+	}
+
+	if txQueryError != nil {
+		return "", fmt.Errorf("query after broadcasting of tx failed: %w", txQueryError)
 	}
 
 	return broadcastRes.TxResponse.TxHash, nil
@@ -161,6 +185,7 @@ type accountInfoClient interface {
 type txClient interface {
 	Simulate(ctx context.Context, in *txtypes.SimulateRequest, opts ...grpc.CallOption) (*txtypes.SimulateResponse, error)
 	BroadcastTx(ctx context.Context, in *txtypes.BroadcastTxRequest, opts ...grpc.CallOption) (*txtypes.BroadcastTxResponse, error)
+	GetTx(ctx context.Context, in *txtypes.GetTxRequest, opts ...grpc.CallOption) (*txtypes.GetTxResponse, error)
 }
 
 type signer interface {

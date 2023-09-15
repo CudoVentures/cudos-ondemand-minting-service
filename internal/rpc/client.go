@@ -1,8 +1,8 @@
 package rpc
 
 import (
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/cosmos/cosmos-sdk/client"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
 
 func (_ RPCConnector) MakeRPCClient(url string) (*rpchttp.HTTP, error) {

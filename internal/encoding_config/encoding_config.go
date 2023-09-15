@@ -1,8 +1,8 @@
 package encodingconfig
 
 import (
+	"cosmossdk.io/simapp/params"
 	cudosapp "github.com/CudoVentures/cudos-node/app"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/cosmos/cosmos-sdk/types/module"
 )

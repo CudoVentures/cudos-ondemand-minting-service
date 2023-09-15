@@ -3,8 +3,8 @@ package account
 import (
 	"context"
 
+	"cosmossdk.io/simapp/params"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
-	"github.com/cosmos/cosmos-sdk/simapp/params"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	auth "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"google.golang.org/grpc"

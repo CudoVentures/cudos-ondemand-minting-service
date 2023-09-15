@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/stretchr/testify/require"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
 func TestShouldFailIfNodeTxSearchFails(t *testing.T) {

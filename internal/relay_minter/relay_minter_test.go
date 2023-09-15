@@ -9,25 +9,24 @@ import (
 
 	cudosapp "github.com/CudoVentures/cudos-node/app"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
-	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/email"
 	encodingconfig "github.com/CudoVentures/cudos-ondemand-minting-service/internal/encoding_config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/grpc"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/key"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/rpc"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/tx"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
+	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 	ggrpc "google.golang.org/grpc"
 )
 
 func TestRelay(t *testing.T) {
-	cudosapp.SetConfig()
+	cudosapp.InitializeSdk()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
 
 	privKey, err := key.PrivKeyFromMnemonic(walletMnemonic)
@@ -75,7 +74,7 @@ func TestRelay(t *testing.T) {
 	mockLogger := newMockLogger()
 
 	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, mockStatesStorage,
-		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+		mockTokenisedInfraClient, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 
 	testCases := buildTestCases(t, &encodingConfig, relayMinter.walletAddress)
 
@@ -113,7 +112,7 @@ func TestShouldRetryIfGRPCConnectionFails(t *testing.T) {
 		MaxRetries:    10,
 	}
 	grpcConnector := mockGRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, &grpcConnector, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -131,9 +130,12 @@ func TestShouldRetryIfRPCConnectionFails(t *testing.T) {
 		PaymentDenom:  "acudos",
 		RetryInterval: 1 * time.Second,
 		MaxRetries:    10,
+		ChainID:       "cudos-local-network",
+		ChainRPC:      "http://127.0.0.1:26657",
+		ChainGRPC:     "127.0.0.1:9090",
 	}
 	rpcConnector := mockRPCConnector{}
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, nil, nil, privKey, grpc.GRPCConnector{}, &rpcConnector, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -147,7 +149,7 @@ func TestShouldFailMintIfEstimateGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 
 	gasEstimateFail := errors.New("failed to estimate gas")
 	mcts := mockCallsTxSender{}
@@ -165,7 +167,7 @@ func TestShouldFailMintIfReceivedAmountIsSmallerThanTheGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 
 	mcts := mockCallsTxSender{}
 	mcts.On("EstimateGas", mock.Anything, mock.Anything, mock.Anything).Return(model.GasResult{GasLimit: 1}, nil)
@@ -187,7 +189,7 @@ func TestShouldFailMintIfSendTxFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 
 	sendTxFail := errors.New("failed to send tx")
 	mcts := mockCallsTxSender{}
@@ -212,7 +214,7 @@ func TestShouldFailRefundIfParsingWalletAddressFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, &mockEmailService{})
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 	relayMinter.walletAddress = sdk.AccAddress{}
 
@@ -227,7 +229,7 @@ func TestShouldFailRefundIfParsingRefundReceiverAddressFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, &mockEmailService{})
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 
 	err = relayMinter.refund(context.Background(), "txHash", "refundReceiver", sdk.NewCoin("acudos", sdk.NewInt(0)))
@@ -241,7 +243,7 @@ func TestShouldFailRefundIfEstimateGasFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, &mockEmailService{})
 	relayMinter.txQuerier = newMockTxQuerier(nil, nil, nil, false)
 
 	gasEstimateFail := errors.New("failed to estimate gas")
@@ -259,7 +261,7 @@ func TestShouldFailRefundIfIsRefundFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, newMockState(), nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, newMockState(), nil, privKey, nil, nil, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
@@ -288,7 +290,7 @@ func TestShouldFailIsMintedIfQueryFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, &mockEmailService{})
 
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
@@ -306,7 +308,7 @@ func TestIsMintedShouldLogErrorIfDecodingTxFails(t *testing.T) {
 
 	mockLogger := newMockLogger()
 	encodingConfig := encodingconfig.MakeEncodingConfig()
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, config.Config{PaymentDenom: "acudos"}, nil, nil, privKey, nil, nil, nil, &mockEmailService{})
 
 	txQuerier := mockCallsTxQuerier{}
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{
@@ -347,7 +349,7 @@ func TestShouldRetryRelayingIfRelayFails(t *testing.T) {
 	mcss := mockCallsStateStorage{}
 	mcss.On("GetState").Return(model.State{}, failedGettingState)
 
-	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, &mcss, nil, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(mockLogger, &encodingConfig, cfg, &mcss, nil, privKey, grpc.GRPCConnector{}, rpc.RPCConnector{}, tx.NewTxCoder(&encodingConfig), &mockEmailService{})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	go relayMinter.Start(ctx)
@@ -362,7 +364,7 @@ func TestShouldFailRelayIfQueryFails(t *testing.T) {
 
 	mockStatesStorage := newMockState()
 
-	relayMinter := NewRelayMinter(newMockLogger(), nil, config.Config{}, mockStatesStorage, nil, privKey, nil, nil, nil, email.NewSendgridEmailService(config.Config{}))
+	relayMinter := NewRelayMinter(newMockLogger(), nil, config.Config{}, mockStatesStorage, nil, privKey, nil, nil, nil, &mockEmailService{})
 	txQuerier := mockCallsTxQuerier{}
 	failedQuery := errors.New("failed query")
 	txQuerier.On("Query", mock.Anything, mock.Anything).Return(&ctypes.ResultTxSearch{}, failedQuery)
@@ -455,3 +457,9 @@ const walletMnemonic = "rebel wet poet torch carpet gaze axis ribbon approve dep
 const refundReceiver = "cudos1vz78ezuzskf9fgnjkmeks75xum49hug6l2wgeg"
 
 var tomorrow = time.Now().Add(time.Hour * 24).UnixMilli()
+
+type mockEmailService struct {
+}
+
+func (e *mockEmailService) SendEmail(content string) {
+}

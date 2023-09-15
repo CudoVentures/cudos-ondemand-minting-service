@@ -1,9 +1,9 @@
 package tx
 
 import (
-	"github.com/cosmos/cosmos-sdk/simapp/params"
+	"cosmossdk.io/simapp/params"
+	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	tmtypes "github.com/tendermint/tendermint/types"
 )
 
 func NewTxCoder(encodingConfig *params.EncodingConfig) *txCoder {

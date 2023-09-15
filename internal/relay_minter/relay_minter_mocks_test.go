@@ -8,8 +8,8 @@ import (
 
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/config"
 	"github.com/CudoVentures/cudos-ondemand-minting-service/internal/model"
+	ctypes "github.com/cometbft/cometbft/rpc/core/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 )
 
 func newMockState() *mockState {
