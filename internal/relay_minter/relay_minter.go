@@ -153,7 +153,10 @@ func (rm *relayMinter) relay(ctx context.Context) error {
 	}
 
 	rm.logger.Infof("check events after %d of wallet %s", s.Height, rm.walletAddress.String())
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress.String()))
+	// results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>%d AND transfer.recipient='%s'", s.Height, rm.walletAddress.String()))
+	results, err := rm.txQuerier.QueryLegacy(ctx, []*relaytx.TxQuerierLegacyParams{
+		{Key: "transfer.recipient", Value: rm.walletAddress.String()},
+	}, s.Height+1)
 	if err != nil {
 		return err
 	}
@@ -369,7 +372,11 @@ func (rm *relayMinter) isMintingTransaction(ctx context.Context, buyerAddress, i
 // This is TRUE because a refund transaction has a memo = incoming transaction's hash
 func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash string, incomingPaymentTxHeight int64, refundReceiver string) (bool, error) {
 	rm.logger.Infof("checking whether %s is refunded", incomingPaymentTxHash)
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND transfer.sender='%s' AND transfer.recipient='%s'", incomingPaymentTxHeight, rm.walletAddress, refundReceiver))
+	// results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND transfer.sender='%s' AND transfer.recipient='%s'", incomingPaymentTxHeight, rm.walletAddress, refundReceiver))
+	results, err := rm.txQuerier.QueryLegacy(ctx, []*relaytx.TxQuerierLegacyParams{
+		{Key: "transfer.sender", Value: rm.walletAddress.String()},
+		{Key: "transfer.recipient", Value: refundReceiver},
+	}, incomingPaymentTxHeight)
 	if err != nil {
 		return false, err
 	}
@@ -421,7 +428,10 @@ func (rm *relayMinter) isRefunded(ctx context.Context, incomingPaymentTxHash str
 func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid string, incomingPaymentTxHeight int64, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.uid='%s'", incomingPaymentTxHeight, uid))
+	// results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.uid='%s'", incomingPaymentTxHeight, uid))
+	results, err := rm.txQuerier.QueryLegacy(ctx, []*relaytx.TxQuerierLegacyParams{
+		{Key: "marketplace_mint_nft.uid", Value: uid},
+	}, incomingPaymentTxHeight)
 	if err != nil {
 		return resultingArray, err
 	}
@@ -465,7 +475,10 @@ func (rm *relayMinter) queryNftMintTransactionByUid(ctx context.Context, uid str
 func (rm *relayMinter) queryNftMintTransactionByBuyer(ctx context.Context, buyerAddress string, incomingPaymentTxHeight int64, logInfo string) ([]*decodedTxWithMemo, error) {
 	resultingArray := make([](*decodedTxWithMemo), 0)
 
-	results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.buyer='%s'", incomingPaymentTxHeight, buyerAddress))
+	// results, err := rm.txQuerier.Query(ctx, fmt.Sprintf("tx.height>=%d AND marketplace_mint_nft.buyer='%s'", incomingPaymentTxHeight, buyerAddress))
+	results, err := rm.txQuerier.QueryLegacy(ctx, []*relaytx.TxQuerierLegacyParams{
+		{Key: "marketplace_mint_nft.buyer", Value: buyerAddress},
+	}, incomingPaymentTxHeight)
 	if err != nil {
 		return resultingArray, err
 	}
@@ -650,7 +663,8 @@ type txSender interface {
 }
 
 type txQuerier interface {
-	Query(ctx context.Context, query string) (*ctypes.ResultTxSearch, error)
+	// Query(ctx context.Context, query string) (*ctypes.ResultTxSearch, error)
+	QueryLegacy(ctx context.Context, query []*relaytx.TxQuerierLegacyParams, heights ...int64) (*ctypes.ResultTxSearch, error)
 }
 
 type nftDataClient interface {
