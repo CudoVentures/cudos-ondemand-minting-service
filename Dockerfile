@@ -1,4 +1,4 @@
-FROM amd64/golang:1.18-buster
+FROM amd64/golang:1.19-buster
 
 RUN apt-get update && apt-get install git
 
